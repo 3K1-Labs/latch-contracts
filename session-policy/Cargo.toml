@@ -5,7 +5,7 @@ members = [
 ]
 
 [package]
-name = "smart-account"
+name = "session-policy"
 version = "0.0.0"
 edition = "2021"
 publish = false
@@ -21,8 +21,6 @@ stellar-accounts = { git = "https://github.com/OpenZeppelin/stellar-contracts.gi
 [dev-dependencies]
 soroban-sdk = { version = "25.0.2", features = ["testutils"] }
 stellar-accounts = { git = "https://github.com/OpenZeppelin/stellar-contracts.git", rev = "187ad25428a21bf829fb6f123238e3cddb24e02a", package = "stellar-accounts" }
-session-policy = { path = "../session-policy" }
-spending-limit-policy = { path = "../spending-limit-policy" }
 
 [profile.release]
 opt-level = "z"

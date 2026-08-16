@@ -1312,16 +1312,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8ed6a63f02c8539c91a8685a86f4099661ba3da017932f6ebbea6de3f0fa7c90"
 
 [[package]]
-name = "smart-account"
-version = "0.0.0"
-dependencies = [
- "session-policy",
- "soroban-sdk",
- "spending-limit-policy",
- "stellar-accounts",
-]
-
-[[package]]
 name = "soroban-builtin-sdk-macros"
 version = "25.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1512,14 +1502,6 @@ dependencies = [
  "wasmi_arena",
  "wasmi_core",
  "wasmparser-nostd",
-]
-
-[[package]]
-name = "spending-limit-policy"
-version = "0.0.0"
-dependencies = [
- "soroban-sdk",
- "stellar-accounts",
 ]
 
 [[package]]
