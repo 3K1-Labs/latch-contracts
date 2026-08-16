@@ -248,3 +248,14 @@ Located at `/Users/user/SuperFranky/latch/reference/g2c`:
 | Secp256k1 verifier (MetaMask) | Spec written, implementation pending |
 | WebAuthn verifier (passkeys) | Spec written, implementation pending |
 | Threshold policy | Planned — can reuse OZ SimpleThresholdPolicy |
+
+---
+
+## Upgrade Path & Factory Immutability
+
+Decided: factory stays fully immutable (no admin key, no timelock — new smart-account version =
+new factory deployment); smart account should gain a self-authorized `upgrade()` gated by its own
+`require_auth()`, same tier as `add_signer`/`remove_policy`, not a new external admin.
+
+Full reasoning, rejected alternatives (single admin key, multisig, timelock), and what's still
+undecided (exact `upgrade()` signature, auth scoping, storage migration) → see `UPGRADE_PATH.md`.
