@@ -15,16 +15,18 @@ impl Verifier for WebAuthnVerifier {
     type KeyData = Bytes;
     type SigData = Bytes;
 
-    /// Verify a WebAuthn authentication assertion against a Soroban auth payload hash.
+    /// Verify a WebAuthn authentication assertion against a Soroban auth
+    /// payload hash.
     ///
     /// # Arguments
     ///
-    /// * `hash` - The 32-byte Soroban auth payload hash. The client base64url-encodes
-    ///   this and embeds it as the `challenge` field in `clientDataJSON`.
-    /// * `key_data` - Bytes containing a 65-byte uncompressed secp256r1 public key
-    ///   (0x04 prefix + 32-byte X + 32-byte Y) followed by an optional variable-length
-    ///   credential ID suffix. The credential ID is client-side metadata and is stripped
-    ///   by `canonicalize_key`.
+    /// * `hash` - The 32-byte Soroban auth payload hash. The client
+    ///   base64url-encodes this and embeds it as the `challenge` field in
+    ///   `clientDataJSON`.
+    /// * `key_data` - Bytes containing a 65-byte uncompressed secp256r1 public
+    ///   key (0x04 prefix + 32-byte X + 32-byte Y) followed by an optional
+    ///   variable-length credential ID suffix. The credential ID is client-side
+    ///   metadata and is stripped by `canonicalize_key`.
     /// * `sig_data` - XDR-encoded `WebAuthnSigData` struct containing:
     ///   - `signature`: 64-byte compact P-256 signature (r || s)
     ///   - `authenticator_data`: raw authenticator data bytes (≥37 bytes)
@@ -43,13 +45,16 @@ impl Verifier for WebAuthnVerifier {
         webauthn::verify(e, &hash, &pub_key, &sig_struct)
     }
 
-    /// Returns the canonical 65-byte public key, stripping any credential ID suffix.
+    /// Returns the canonical 65-byte public key, stripping any credential ID
+    /// suffix.
     ///
-    /// Two registrations of the same P-256 key with different credential IDs must
-    /// produce identical canonical output — this enables the smart account to detect
-    /// and reject duplicate signers regardless of which device was used to register.
+    /// Two registrations of the same P-256 key with different credential IDs
+    /// must produce identical canonical output — this enables the smart
+    /// account to detect and reject duplicate signers regardless of which
+    /// device was used to register.
     ///
-    /// Panics with `Error(Contract, #3119)` if `key_data` is shorter than 65 bytes.
+    /// Panics with `Error(Contract, #3119)` if `key_data` is shorter than 65
+    /// bytes.
     fn canonicalize_key(e: &Env, key_data: Bytes) -> Bytes {
         webauthn::canonicalize_key(e, &key_data)
     }
