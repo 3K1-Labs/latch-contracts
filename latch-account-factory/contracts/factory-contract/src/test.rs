@@ -2,8 +2,12 @@
 
 extern crate std;
 
+use soroban_sdk::{
+    testutils::{Address as _, Events as _},
+    Address, Bytes, BytesN, Env,
+};
+
 use super::*;
-use soroban_sdk::{testutils::{Address as _, Events as _}, Address, Bytes, BytesN, Env};
 
 // ---------------------------------------------------------------------------
 // Embed compiled dummy wasm so deploy_v2 can instantiate real contracts.
@@ -72,13 +76,7 @@ fn install_factory_stub(env: &Env) -> ContractClient<'_> {
 
     let contract_id = env.register(
         Contract,
-        (
-            zero_hash,
-            singleton.clone(),
-            singleton.clone(),
-            singleton.clone(),
-            singleton,
-        ),
+        (zero_hash, singleton.clone(), singleton.clone(), singleton.clone(), singleton),
     );
 
     ContractClient::new(env, &contract_id)
@@ -103,10 +101,7 @@ fn secp256k1_signer(env: &Env, byte: u8) -> ExternalSignerInit {
 fn webauthn_signer(env: &Env, byte: u8) -> ExternalSignerInit {
     let mut raw = [byte; 100]; // >65 bytes, 0x04 prefix
     raw[0] = 0x04;
-    ExternalSignerInit {
-        signer_kind: SignerKind::WebAuthn,
-        key_data: Bytes::from_array(env, &raw),
-    }
+    ExternalSignerInit { signer_kind: SignerKind::WebAuthn, key_data: Bytes::from_array(env, &raw) }
 }
 
 fn delegated_signer(env: &Env) -> AccountSignerInit {
@@ -140,10 +135,7 @@ fn same_params_same_address() {
         account_salt: BytesN::from_array(&env, &[9; 32]),
     };
 
-    assert_eq!(
-        client.get_account_address(&params),
-        client.get_account_address(&params)
-    );
+    assert_eq!(client.get_account_address(&params), client.get_account_address(&params));
 }
 
 #[test]
@@ -158,16 +150,7 @@ fn constructor_rejects_undeployed_singletons() {
     // constructor-level failures cannot be caught with try_* client methods
     // because no client exists until registration succeeds.
     let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-        env.register(
-            Contract,
-            (
-                zero_hash,
-                fake.clone(),
-                fake.clone(),
-                fake.clone(),
-                fake.clone(),
-            ),
-        );
+        env.register(Contract, (zero_hash, fake.clone(), fake.clone(), fake.clone(), fake.clone()));
     }));
 
     assert!(result.is_err());
@@ -386,18 +369,9 @@ fn get_verifier_returns_stored_addresses() {
     let env = Env::default();
     let setup = install_factory(&env);
 
-    assert_eq!(
-        setup.client.get_verifier(&SignerKind::Ed25519),
-        setup.ed25519_verifier
-    );
-    assert_eq!(
-        setup.client.get_verifier(&SignerKind::Secp256k1),
-        setup.secp256k1_verifier
-    );
-    assert_eq!(
-        setup.client.get_verifier(&SignerKind::WebAuthn),
-        setup.webauthn_verifier
-    );
+    assert_eq!(setup.client.get_verifier(&SignerKind::Ed25519), setup.ed25519_verifier);
+    assert_eq!(setup.client.get_verifier(&SignerKind::Secp256k1), setup.secp256k1_verifier);
+    assert_eq!(setup.client.get_verifier(&SignerKind::WebAuthn), setup.webauthn_verifier);
 }
 
 #[test]
@@ -534,11 +508,7 @@ fn create_account_multisig_deploys_at_precomputed_address() {
     let setup = install_factory(&env);
 
     let params = AccountInitParams {
-        signers: soroban_sdk::vec![
-            &env,
-            ext_ed25519_signer(&env, 1),
-            ext_ed25519_signer(&env, 2)
-        ],
+        signers: soroban_sdk::vec![&env, ext_ed25519_signer(&env, 1), ext_ed25519_signer(&env, 2)],
         threshold: Some(2),
         account_salt: BytesN::from_array(&env, &[15; 32]),
     };
@@ -617,11 +587,7 @@ fn create_account_with_delegated_and_external_multisig() {
     let setup = install_factory(&env);
 
     let params = AccountInitParams {
-        signers: soroban_sdk::vec![
-            &env,
-            delegated_signer(&env),
-            ext_webauthn_signer(&env, 9)
-        ],
+        signers: soroban_sdk::vec![&env, delegated_signer(&env), ext_webauthn_signer(&env, 9)],
         threshold: Some(2),
         account_salt: BytesN::from_array(&env, &[42; 32]),
     };

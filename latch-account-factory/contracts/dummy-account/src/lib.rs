@@ -10,10 +10,5 @@ pub struct DummyAccount;
 
 #[contractimpl]
 impl DummyAccount {
-    pub fn __constructor(
-        _env: Env,
-        _signers: Vec<Signer>,
-        _policies: Map<Address, Val>,
-    ) {
-    }
+    pub fn __constructor(_env: Env, _signers: Vec<Signer>, _policies: Map<Address, Val>) {}
 }

@@ -1,8 +1,8 @@
 #![no_std]
 
 use soroban_sdk::{
-    contract, contracterror, contractevent, contractimpl, contracttype, panic_with_error, Address,
-    Bytes, BytesN, Env, IntoVal, Map, Val, Vec, xdr::ToXdr,
+    contract, contracterror, contractevent, contractimpl, contracttype, panic_with_error,
+    xdr::ToXdr, Address, Bytes, BytesN, Env, IntoVal, Map, Val, Vec,
 };
 use stellar_accounts::{
     policies::simple_threshold::SimpleThresholdAccountParams, smart_account::Signer,
@@ -133,7 +133,8 @@ impl Contract {
         }
 
         let signers = build_account_signers(&env, &config, &normalized.signers);
-        let policies = build_account_policies(&env, &config, &normalized.effective_threshold, signers.len());
+        let policies =
+            build_account_policies(&env, &config, &normalized.effective_threshold, signers.len());
 
         let account = deployer.deploy_v2(config.smart_account_wasm_hash, (&signers, &policies));
         AccountCreated { account: account.clone() }.publish(&env);
@@ -231,20 +232,18 @@ fn canonicalize_signers(env: &Env, signers: &Vec<AccountSignerInit>) -> Vec<Acco
 }
 
 fn compare_signers(left: &AccountSignerInit, right: &AccountSignerInit) -> core::cmp::Ordering {
-    account_signer_code(left)
-        .cmp(&account_signer_code(right))
-        .then_with(|| match (left, right) {
-            (AccountSignerInit::Delegated(left_addr), AccountSignerInit::Delegated(right_addr)) => {
-                left_addr.cmp(right_addr)
-            }
-            (
-                AccountSignerInit::External(left_external),
-                AccountSignerInit::External(right_external),
-            ) => signer_kind_code(left_external.signer_kind)
-                .cmp(&signer_kind_code(right_external.signer_kind))
-                .then_with(|| left_external.key_data.cmp(&right_external.key_data)),
-            _ => core::cmp::Ordering::Equal,
-        })
+    account_signer_code(left).cmp(&account_signer_code(right)).then_with(|| match (left, right) {
+        (AccountSignerInit::Delegated(left_addr), AccountSignerInit::Delegated(right_addr)) => {
+            left_addr.cmp(right_addr)
+        }
+        (
+            AccountSignerInit::External(left_external),
+            AccountSignerInit::External(right_external),
+        ) => signer_kind_code(left_external.signer_kind)
+            .cmp(&signer_kind_code(right_external.signer_kind))
+            .then_with(|| left_external.key_data.cmp(&right_external.key_data)),
+        _ => core::cmp::Ordering::Equal,
+    })
 }
 
 fn validate_signer_shape(env: &Env, signer: &AccountSignerInit) {
@@ -257,14 +256,12 @@ fn validate_signer_shape(env: &Env, signer: &AccountSignerInit) {
                 }
             }
             SignerKind::Secp256k1 => {
-                if external.key_data.len() != 65 || external.key_data.get(0).unwrap_or(0) != 0x04
-                {
+                if external.key_data.len() != 65 || external.key_data.get(0).unwrap_or(0) != 0x04 {
                     panic_with_error!(env, FactoryError::InvalidSecp256k1Key);
                 }
             }
             SignerKind::WebAuthn => {
-                if external.key_data.len() <= 65 || external.key_data.get(0).unwrap_or(0) != 0x04
-                {
+                if external.key_data.len() <= 65 || external.key_data.get(0).unwrap_or(0) != 0x04 {
                     panic_with_error!(env, FactoryError::InvalidWebAuthnKey);
                 }
             }

@@ -2,7 +2,6 @@
 
 extern crate std;
 
-use super::{LatchSmartAccount, LatchSmartAccountClient};
 use soroban_sdk::{
     contract, contractimpl, testutils::Address as _, vec, Address, Env, IntoVal, Map, String,
     Symbol, Val, Vec,
@@ -12,22 +11,19 @@ use stellar_accounts::{
     smart_account::{ContextRuleType, Signer},
 };
 
+use super::{LatchSmartAccount, LatchSmartAccountClient};
+
 #[contract]
 struct MockTargetContract;
 
 #[contractimpl]
 impl MockTargetContract {
     pub fn set(e: Env, value: u32) {
-        e.storage()
-            .persistent()
-            .set(&Symbol::new(&e, "value"), &value);
+        e.storage().persistent().set(&Symbol::new(&e, "value"), &value);
     }
 
     pub fn get(e: Env) -> u32 {
-        e.storage()
-            .persistent()
-            .get(&Symbol::new(&e, "value"))
-            .unwrap_or(0)
+        e.storage().persistent().get(&Symbol::new(&e, "value")).unwrap_or(0)
     }
 }
 
@@ -104,11 +100,7 @@ fn execute_forwards_calls() {
     let target_id = env.register(MockTargetContract, ());
     let target_client = MockTargetContractClient::new(&env, &target_id);
 
-    client.execute(
-        &target_id,
-        &Symbol::new(&env, "set"),
-        &vec![&env, 7u32.into_val(&env)],
-    );
+    client.execute(&target_id, &Symbol::new(&env, "set"), &vec![&env, 7u32.into_val(&env)]);
 
     assert_eq!(target_client.get(), 7);
 }
@@ -123,11 +115,7 @@ fn execute_requires_self_auth() {
     let (_account_id, client) = register_account(&env, &signers, &policies);
 
     let target_id = env.register(MockTargetContract, ());
-    client.execute(
-        &target_id,
-        &Symbol::new(&env, "set"),
-        &vec![&env, 1u32.into_val(&env)],
-    );
+    client.execute(&target_id, &Symbol::new(&env, "set"), &vec![&env, 1u32.into_val(&env)]);
 }
 
 #[test]
@@ -205,10 +193,7 @@ fn add_signer_requires_self_auth() {
     let (_account_id, client) = register_account(&env, &signers, &policies);
 
     let default_rule = client.get_context_rule(&0);
-    client.add_signer(
-        &default_rule.id,
-        &Signer::Delegated(Address::generate(&env)),
-    );
+    client.add_signer(&default_rule.id, &Signer::Delegated(Address::generate(&env)));
 }
 
 #[test]
