@@ -6,9 +6,9 @@ use soroban_sdk::{
     testutils::{Address as _, Events},
     vec, Address, BytesN, Env, String, Vec,
 };
+use stellar_accounts::smart_account::{ContextRule, ContextRuleType, Signer};
 
 use crate::allowlist::*;
-use stellar_accounts::smart_account::{ContextRule, ContextRuleType, Signer};
 
 #[contract]
 struct MockContract;
@@ -75,9 +75,7 @@ fn install_rejects_default_rule() {
     e.as_contract(&address, || {
         let mut context_rule = create_context_rule(&e);
         context_rule.context_type = ContextRuleType::Default;
-        let params = SessionAccountParams {
-            allowed_fns: vec![&e, symbol_short!("set")],
-        };
+        let params = SessionAccountParams { allowed_fns: vec![&e, symbol_short!("set")] };
 
         install(&e, &params, &context_rule, &smart_account);
     });
@@ -96,9 +94,7 @@ fn install_rejects_create_contract_rule() {
         let mut context_rule = create_context_rule(&e);
         context_rule.context_type =
             ContextRuleType::CreateContract(BytesN::from_array(&e, &[0u8; 32]));
-        let params = SessionAccountParams {
-            allowed_fns: vec![&e, symbol_short!("set")],
-        };
+        let params = SessionAccountParams { allowed_fns: vec![&e, symbol_short!("set")] };
 
         install(&e, &params, &context_rule, &smart_account);
     });
@@ -115,9 +111,7 @@ fn install_rejects_empty_allowed_fns() {
 
     e.as_contract(&address, || {
         let context_rule = create_context_rule(&e);
-        let params = SessionAccountParams {
-            allowed_fns: Vec::new(&e),
-        };
+        let params = SessionAccountParams { allowed_fns: Vec::new(&e) };
 
         install(&e, &params, &context_rule, &smart_account);
     });
@@ -154,9 +148,7 @@ fn install_rejects_already_installed() {
     e.mock_all_auths();
 
     let context_rule = create_context_rule(&e);
-    let params = SessionAccountParams {
-        allowed_fns: vec![&e, symbol_short!("set")],
-    };
+    let params = SessionAccountParams { allowed_fns: vec![&e, symbol_short!("set")] };
 
     e.as_contract(&address, || {
         install(&e, &params, &context_rule, &smart_account);
@@ -177,21 +169,13 @@ fn enforce_allows_whitelisted_fn() {
     e.mock_all_auths();
 
     e.as_contract(&address, || {
-        let params = SessionAccountParams {
-            allowed_fns: vec![&e, symbol_short!("set")],
-        };
+        let params = SessionAccountParams { allowed_fns: vec![&e, symbol_short!("set")] };
         install(&e, &params, &context_rule, &smart_account);
     });
 
     e.as_contract(&address, || {
         let context = create_contract_context(&e, symbol_short!("set"));
-        enforce(
-            &e,
-            &context,
-            &context_rule.signers,
-            &context_rule,
-            &smart_account,
-        );
+        enforce(&e, &context, &context_rule.signers, &context_rule, &smart_account);
 
         assert!(!e.events().all().events().is_empty());
     });
@@ -208,21 +192,13 @@ fn enforce_rejects_non_whitelisted_fn() {
     e.mock_all_auths();
 
     e.as_contract(&address, || {
-        let params = SessionAccountParams {
-            allowed_fns: vec![&e, symbol_short!("set")],
-        };
+        let params = SessionAccountParams { allowed_fns: vec![&e, symbol_short!("set")] };
         install(&e, &params, &context_rule, &smart_account);
     });
 
     e.as_contract(&address, || {
         let context = create_contract_context(&e, symbol_short!("delete"));
-        enforce(
-            &e,
-            &context,
-            &context_rule.signers,
-            &context_rule,
-            &smart_account,
-        );
+        enforce(&e, &context, &context_rule.signers, &context_rule, &smart_account);
     });
 }
 
@@ -237,9 +213,7 @@ fn enforce_rejects_create_contract_context() {
     e.mock_all_auths();
 
     e.as_contract(&address, || {
-        let params = SessionAccountParams {
-            allowed_fns: vec![&e, symbol_short!("set")],
-        };
+        let params = SessionAccountParams { allowed_fns: vec![&e, symbol_short!("set")] };
         install(&e, &params, &context_rule, &smart_account);
     });
 
@@ -249,13 +223,7 @@ fn enforce_rejects_create_contract_context() {
             executable: ContractExecutable::Wasm(BytesN::from_array(&e, &[1u8; 32])),
         });
 
-        enforce(
-            &e,
-            &context,
-            &context_rule.signers,
-            &context_rule,
-            &smart_account,
-        );
+        enforce(&e, &context, &context_rule.signers, &context_rule, &smart_account);
     });
 }
 
@@ -271,13 +239,7 @@ fn enforce_rejects_when_not_installed() {
 
     e.as_contract(&address, || {
         let context = create_contract_context(&e, symbol_short!("set"));
-        enforce(
-            &e,
-            &context,
-            &context_rule.signers,
-            &context_rule,
-            &smart_account,
-        );
+        enforce(&e, &context, &context_rule.signers, &context_rule, &smart_account);
     });
 }
 
@@ -292,9 +254,7 @@ fn enforce_rejects_empty_authenticated_signers() {
     e.mock_all_auths();
 
     e.as_contract(&address, || {
-        let params = SessionAccountParams {
-            allowed_fns: vec![&e, symbol_short!("set")],
-        };
+        let params = SessionAccountParams { allowed_fns: vec![&e, symbol_short!("set")] };
         install(&e, &params, &context_rule, &smart_account);
     });
 
@@ -314,9 +274,7 @@ fn uninstall_success() {
     e.mock_all_auths();
 
     e.as_contract(&address, || {
-        let params = SessionAccountParams {
-            allowed_fns: vec![&e, symbol_short!("set")],
-        };
+        let params = SessionAccountParams { allowed_fns: vec![&e, symbol_short!("set")] };
         install(&e, &params, &context_rule, &smart_account);
     });
 
@@ -365,9 +323,6 @@ fn get_allowed_fns_returns_installed_value() {
 
     e.as_contract(&address, || {
         let allowed_fns = get_allowed_fns(&e, context_rule.id, &smart_account);
-        assert_eq!(
-            allowed_fns,
-            vec![&e, symbol_short!("set"), symbol_short!("get")]
-        );
+        assert_eq!(allowed_fns, vec![&e, symbol_short!("set"), symbol_short!("get")]);
     });
 }

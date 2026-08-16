@@ -2,7 +2,6 @@
 
 extern crate std;
 
-use super::{LatchSmartAccount, LatchSmartAccountClient};
 use session_policy::{SessionAccountParams, SessionPolicy};
 use soroban_sdk::{
     auth::{Context, ContractContext},
@@ -226,11 +225,7 @@ fn add_policy_requires_self_auth() {
 // `latch-verifiers` crates' own test suites.
 
 fn get_context(contract: Address, fn_name: Symbol, args: Vec<Val>) -> Context {
-    Context::Contract(ContractContext {
-        contract,
-        fn_name,
-        args,
-    })
+    Context::Contract(ContractContext { contract, fn_name, args })
 }
 
 fn create_signatures(e: &Env, signers: &Vec<Signer>, context_rule_ids: Vec<u32>) -> AuthPayload {
@@ -238,10 +233,7 @@ fn create_signatures(e: &Env, signers: &Vec<Signer>, context_rule_ids: Vec<u32>)
     for signer in signers.iter() {
         signature_map.set(signer, Bytes::new(e));
     }
-    AuthPayload {
-        signers: signature_map,
-        context_rule_ids,
-    }
+    AuthPayload { signers: signature_map, context_rule_ids }
 }
 
 /// Sets up a smart account with a `CallContract(target)` session rule bound
@@ -251,13 +243,7 @@ fn create_signatures(e: &Env, signers: &Vec<Signer>, context_rule_ids: Vec<u32>)
 fn setup_session_rule<'a>(
     env: &'a Env,
     allowed_fns: Vec<Symbol>,
-) -> (
-    Address,
-    LatchSmartAccountClient<'a>,
-    Address,
-    u32,
-    Vec<Signer>,
-) {
+) -> (Address, LatchSmartAccountClient<'a>, Address, u32, Vec<Signer>) {
     env.mock_all_auths();
 
     let owner_signers = default_signers(env);
@@ -290,11 +276,7 @@ fn session_signer_allowed_call_succeeds() {
     let (account_id, _client, target_id, rule_id, session_signers) =
         setup_session_rule(&env, vec![&env, Symbol::new(&env, "set")]);
 
-    let context = get_context(
-        target_id,
-        Symbol::new(&env, "set"),
-        vec![&env, 7u32.into_val(&env)],
-    );
+    let context = get_context(target_id, Symbol::new(&env, "set"), vec![&env, 7u32.into_val(&env)]);
     let auth_contexts = Vec::from_array(&env, [context]);
     let signatures = create_signatures(&env, &session_signers, vec![&env, rule_id]);
     let payload_hash = env.crypto().sha256(&Bytes::from_array(&env, &[1u8; 32]));
@@ -347,10 +329,8 @@ fn session_call_after_valid_until_expiry_rejected() {
     );
 
     let session_policy_id = env.register(SessionPolicy, ());
-    let install_param: Val = SessionAccountParams {
-        allowed_fns: vec![&env, Symbol::new(&env, "set")],
-    }
-    .into_val(&env);
+    let install_param: Val =
+        SessionAccountParams { allowed_fns: vec![&env, Symbol::new(&env, "set")] }.into_val(&env);
     client.add_policy(&rule.id, &session_policy_id, &install_param);
 
     // Advance past the rule's expiry.
@@ -358,11 +338,7 @@ fn session_call_after_valid_until_expiry_rejected() {
         li.sequence_number = expiry_ledger + 1;
     });
 
-    let context = get_context(
-        target_id,
-        Symbol::new(&env, "set"),
-        vec![&env, 7u32.into_val(&env)],
-    );
+    let context = get_context(target_id, Symbol::new(&env, "set"), vec![&env, 7u32.into_val(&env)]);
     let auth_contexts = Vec::from_array(&env, [context]);
     let signatures = create_signatures(&env, &session_signers, vec![&env, rule.id]);
     let payload_hash = env.crypto().sha256(&Bytes::from_array(&env, &[1u8; 32]));
@@ -381,11 +357,7 @@ fn session_call_after_remove_context_rule_rejected() {
 
     client.remove_context_rule(&rule_id);
 
-    let context = get_context(
-        target_id,
-        Symbol::new(&env, "set"),
-        vec![&env, 7u32.into_val(&env)],
-    );
+    let context = get_context(target_id, Symbol::new(&env, "set"), vec![&env, 7u32.into_val(&env)]);
     let auth_contexts = Vec::from_array(&env, [context]);
     let signatures = create_signatures(&env, &session_signers, vec![&env, rule_id]);
     let payload_hash = env.crypto().sha256(&Bytes::from_array(&env, &[1u8; 32]));
@@ -418,18 +390,14 @@ fn session_plus_spending_limit_over_limit_rejected_even_when_method_allowed() {
     );
 
     let session_policy_id = env.register(SessionPolicy, ());
-    let session_install_param: Val = SessionAccountParams {
-        allowed_fns: vec![&env, symbol_short!("transfer")],
-    }
-    .into_val(&env);
+    let session_install_param: Val =
+        SessionAccountParams { allowed_fns: vec![&env, symbol_short!("transfer")] }.into_val(&env);
     client.add_policy(&rule.id, &session_policy_id, &session_install_param);
 
     let spending_limit_policy_id = env.register(SpendingLimitPolicy, ());
-    let spending_install_param: Val = SpendingLimitAccountParams {
-        spending_limit: 1_000_000,
-        period_ledgers: 100,
-    }
-    .into_val(&env);
+    let spending_install_param: Val =
+        SpendingLimitAccountParams { spending_limit: 1_000_000, period_ledgers: 100 }
+            .into_val(&env);
     client.add_policy(&rule.id, &spending_limit_policy_id, &spending_install_param);
 
     // "transfer" is allowlisted, but the amount exceeds the spending limit.
@@ -438,12 +406,7 @@ fn session_plus_spending_limit_over_limit_rejected_even_when_method_allowed() {
     let context = get_context(
         target_id,
         symbol_short!("transfer"),
-        vec![
-            &env,
-            from.into_val(&env),
-            to.into_val(&env),
-            2_000_000i128.into_val(&env),
-        ],
+        vec![&env, from.into_val(&env), to.into_val(&env), 2_000_000i128.into_val(&env)],
     );
     let auth_contexts = Vec::from_array(&env, [context]);
     let signatures = create_signatures(&env, &session_signers, vec![&env, rule.id]);
@@ -477,18 +440,14 @@ fn session_plus_spending_limit_disallowed_method_rejected_even_when_under_limit(
     );
 
     let session_policy_id = env.register(SessionPolicy, ());
-    let session_install_param: Val = SessionAccountParams {
-        allowed_fns: vec![&env, symbol_short!("transfer")],
-    }
-    .into_val(&env);
+    let session_install_param: Val =
+        SessionAccountParams { allowed_fns: vec![&env, symbol_short!("transfer")] }.into_val(&env);
     client.add_policy(&rule.id, &session_policy_id, &session_install_param);
 
     let spending_limit_policy_id = env.register(SpendingLimitPolicy, ());
-    let spending_install_param: Val = SpendingLimitAccountParams {
-        spending_limit: 1_000_000,
-        period_ledgers: 100,
-    }
-    .into_val(&env);
+    let spending_install_param: Val =
+        SpendingLimitAccountParams { spending_limit: 1_000_000, period_ledgers: 100 }
+            .into_val(&env);
     client.add_policy(&rule.id, &spending_limit_policy_id, &spending_install_param);
 
     // Well under the spending limit, but "withdraw" is not the allowlisted
@@ -498,12 +457,7 @@ fn session_plus_spending_limit_disallowed_method_rejected_even_when_under_limit(
     let context = get_context(
         target_id,
         symbol_short!("withdraw"),
-        vec![
-            &env,
-            from.into_val(&env),
-            to.into_val(&env),
-            1i128.into_val(&env),
-        ],
+        vec![&env, from.into_val(&env), to.into_val(&env), 1i128.into_val(&env)],
     );
     let auth_contexts = Vec::from_array(&env, [context]);
     let signatures = create_signatures(&env, &session_signers, vec![&env, rule.id]);

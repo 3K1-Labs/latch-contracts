@@ -15,7 +15,6 @@ use soroban_sdk::{
     auth::{Context, ContractContext},
     contracterror, contractevent, contracttype, panic_with_error, Address, Env, Symbol, Vec,
 };
-
 use stellar_accounts::smart_account::{ContextRule, ContextRuleType, Signer};
 
 /// Event emitted when a session policy is enforced.
@@ -118,17 +117,15 @@ pub const MAX_ALLOWED_FNS: u32 = 10;
 ///
 /// # Errors
 ///
-/// * [`SessionError::SmartAccountNotInstalled`] - When the smart account
-///   does not have a session policy installed.
+/// * [`SessionError::SmartAccountNotInstalled`] - When the smart account does
+///   not have a session policy installed.
 pub fn get_allowed_fns(e: &Env, context_rule_id: u32, smart_account: &Address) -> Vec<Symbol> {
     let key = SessionStorageKey::AccountContext(smart_account.clone(), context_rule_id);
     e.storage()
         .persistent()
         .get::<_, SessionData>(&key)
         .inspect(|_| {
-            e.storage()
-                .persistent()
-                .extend_ttl(&key, SESSION_TTL_THRESHOLD, SESSION_EXTEND_AMOUNT);
+            e.storage().persistent().extend_ttl(&key, SESSION_TTL_THRESHOLD, SESSION_EXTEND_AMOUNT);
         })
         .map(|data| data.allowed_fns)
         .unwrap_or_else(|| panic_with_error!(e, SessionError::SmartAccountNotInstalled))
@@ -200,19 +197,18 @@ pub fn enforce(
 /// # Arguments
 ///
 /// * `e` - Access to the Soroban environment.
-/// * `params` - Installation parameters containing the allowed function
-///   names.
+/// * `params` - Installation parameters containing the allowed function names.
 /// * `context_rule` - The context rule for this policy.
 /// * `smart_account` - The address of the smart account.
 ///
 /// # Errors
 ///
-/// * [`SessionError::OnlyCallContractAllowed`] - When the context rule type
-///   is not `CallContract`.
+/// * [`SessionError::OnlyCallContractAllowed`] - When the context rule type is
+///   not `CallContract`.
 /// * [`SessionError::InvalidAllowedFns`] - When `allowed_fns` is empty or
 ///   exceeds `MAX_ALLOWED_FNS`.
-/// * [`SessionError::AlreadyInstalled`] - When the policy was already
-///   installed for this smart account and context rule.
+/// * [`SessionError::AlreadyInstalled`] - When the policy was already installed
+///   for this smart account and context rule.
 ///
 /// # Events
 ///
@@ -241,9 +237,7 @@ pub fn install(
         panic_with_error!(e, SessionError::AlreadyInstalled)
     }
 
-    let data = SessionData {
-        allowed_fns: params.allowed_fns.clone(),
-    };
+    let data = SessionData { allowed_fns: params.allowed_fns.clone() };
 
     e.storage().persistent().set(&key, &data);
 
@@ -286,9 +280,6 @@ pub fn uninstall(e: &Env, context_rule: &ContextRule, smart_account: &Address) {
 
     e.storage().persistent().remove(&key);
 
-    SessionUninstalled {
-        smart_account: smart_account.clone(),
-        context_rule_id: context_rule.id,
-    }
-    .publish(e);
+    SessionUninstalled { smart_account: smart_account.clone(), context_rule_id: context_rule.id }
+        .publish(e);
 }

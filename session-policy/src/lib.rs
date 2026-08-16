@@ -2,13 +2,12 @@
 
 mod allowlist;
 
+pub use allowlist::{SessionAccountParams, SessionData, SessionError, SessionStorageKey};
 use soroban_sdk::{auth::Context, contract, contractimpl, Address, Env, Symbol, Vec};
 use stellar_accounts::{
     policies::Policy,
     smart_account::{ContextRule, Signer},
 };
-
-pub use allowlist::{SessionAccountParams, SessionData, SessionError, SessionStorageKey};
 
 #[contract]
 pub struct SessionPolicy;
@@ -24,13 +23,7 @@ impl Policy for SessionPolicy {
         context_rule: ContextRule,
         smart_account: Address,
     ) {
-        allowlist::enforce(
-            e,
-            &context,
-            &authenticated_signers,
-            &context_rule,
-            &smart_account,
-        )
+        allowlist::enforce(e, &context, &authenticated_signers, &context_rule, &smart_account)
     }
 
     fn install(

@@ -20,13 +20,7 @@ impl Policy for SpendingLimitPolicy {
         context_rule: ContextRule,
         smart_account: Address,
     ) {
-        spending_limit::enforce(
-            e,
-            &context,
-            &authenticated_signers,
-            &context_rule,
-            &smart_account,
-        )
+        spending_limit::enforce(e, &context, &authenticated_signers, &context_rule, &smart_account)
     }
 
     fn install(
