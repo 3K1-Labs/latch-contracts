@@ -6,23 +6,74 @@ on:
   pull_request:
     branches: [ "main" ]
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 env:
   CARGO_TERM_COLOR: always
 
 jobs:
+  # Computed once and shared by every matrix entry below, instead of
+  # OZ's single-job version, since we have a matrix to gate uniformly.
+  # This is a required status check target for some workflows, so it must
+  # always report — the matrix jobs below skip their heavy steps on a
+  # docs-only change, but still run and report success, so a required
+  # check never sits at "Expected — waiting for status to be reported".
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      code: ${{ steps.filter.outputs.code }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Detect code changes
+        id: filter
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            code:
+              - '!**/*.md'
+
   build-and-test:
+    needs: changes
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
         workspace:
           - latch-account-factory
           - latch-smart-account
+          - latch-threshold-policy
+          - latch-verifiers/ed25519-phantom-verifier
+          - latch-verifiers/secp256k1-verifier
+          - latch-verifiers/webauthn-verifier
 
     steps:
       - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        if: needs.changes.outputs.code == 'true'
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          toolchain: stable, nightly
+          components: clippy, rustfmt
+
+      - name: Check format (${{ matrix.workspace }})
+        if: needs.changes.outputs.code == 'true'
+        run: cargo +nightly fmt --all -- --check
+        working-directory: ${{ matrix.workspace }}
+
+      - name: Check clippy (${{ matrix.workspace }})
+        if: needs.changes.outputs.code == 'true'
+        run: cargo +stable clippy --all-targets --all-features -- -D warnings
+        working-directory: ${{ matrix.workspace }}
+
       - name: Build (${{ matrix.workspace }})
+        if: needs.changes.outputs.code == 'true'
         run: cargo build --verbose
         working-directory: ${{ matrix.workspace }}
+
       - name: Test (${{ matrix.workspace }})
+        if: needs.changes.outputs.code == 'true'
         run: cargo test --verbose
         working-directory: ${{ matrix.workspace }}
