@@ -1,0 +1,29 @@
+name: Feature Request
+description: Propose a new feature or change
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        See CONTRIBUTING.md before opening this — non-trivial changes should be discussed here first, before any PR is opened.
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem does this solve?
+      description: Describe the use case or limitation you've run into.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: What you'd like to see, and any alternatives you considered.
+    validations:
+      required: true
+  - type: textarea
+    id: scope
+    attributes:
+      label: Affected crate(s)
+      description: Which contract(s) or policy crate(s) this touches, if known.
+    validations:
+      required: false
