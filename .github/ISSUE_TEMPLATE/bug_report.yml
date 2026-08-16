@@ -1,0 +1,45 @@
+name: Bug Report
+description: Report a bug in one of the Latch contracts
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report a bug. Please check existing issues first to avoid duplicates.
+  - type: dropdown
+    id: crate
+    attributes:
+      label: Affected crate
+      options:
+        - latch-smart-account
+        - latch-account-factory
+        - latch-threshold-policy
+        - latch-verifiers/ed25519-phantom-verifier
+        - latch-verifiers/secp256k1-verifier
+        - latch-verifiers/webauthn-verifier
+        - session-policy
+        - spending-limit-policy
+        - Other / not sure
+    validations:
+      required: true
+  - type: textarea
+    id: description
+    attributes:
+      label: What happened?
+      description: A clear description of the bug and what you expected to happen instead.
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      description: Minimal steps, a failing test, or a transaction that demonstrates the issue.
+    validations:
+      required: false
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Rust version, Stellar CLI version, network (testnet/pubnet), etc.
+    validations:
+      required: false

@@ -22,8 +22,10 @@ latch-contracts/
 │   ├── secp256k1-verifier/      # Stub — implementation pending
 │   └── webauthn-verifier/
 ├── latch-threshold-policy/      # ✅ Threshold policy workspace
-├── contracts/                   # Placeholder (scaffold artifact, unused)
+├── session-policy/              # ✅ Method-allowlist (session key) policy workspace
+├── spending-limit-policy/       # ✅ Spending-limit policy workspace
 ├── factory-spec.md              # Behavioral spec for the factory
+├── UPGRADE_PATH.md              # Account & factory upgrade path decision
 └── PLAN.md                      # v1 architecture plan
 ```
 
@@ -60,6 +62,14 @@ Stateless singleton contracts that verify signatures on behalf of smart accounts
 
 OZ simple threshold policy. Enforces M-of-N authorization for multisig accounts. Deployed as a singleton shared across all multisig accounts.
 
+### Session Policy — `session-policy/` ✅
+
+Restricts a context rule's signers to an allow-listed set of contract function names — the building block behind Latch session keys. Own logic, not a wrapper around an OZ primitive.
+
+### Spending Limit Policy — `spending-limit-policy/` ✅
+
+Thin wrapper around OZ's `stellar-accounts` spending-limit policy. Enforces a rolling spend cap per context rule.
+
 ## Deployment Order
 
 Before a factory can be deployed, all singleton contracts must already exist on the network. The required order is:
@@ -85,15 +95,29 @@ curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 cargo install --locked stellar-cli
 ```
 
-### Build and test the factory
+### Build and test
+
+Each crate above is its own independent Cargo workspace — run commands from inside the specific
+crate directory, not the repo root:
 
 ```bash
-cd latch-account-factory
-stellar contract build --package factory-contract
-cargo test
+cd latch-smart-account   # or any other crate listed above
+
+cargo +nightly fmt --all -- --check   # formatting
+cargo clippy --all-targets --all-features -- -D warnings   # lint
+cargo test                            # unit + integration tests
+stellar contract build                # WASM build
 ```
 
 ## Spec and Planning
 
 - [`factory-spec.md`](factory-spec.md) — Detailed behavioral specification for the factory contract (validation rules, address derivation formula, canonicalization, worked examples)
+- [`UPGRADE_PATH.md`](UPGRADE_PATH.md) — How the factory and smart account handle upgrades and versioning
 - [`PLAN.md`](PLAN.md) — v1 architecture plan covering all contracts in scope
+
+## Contributing
+
+Contributions are welcome — see [`CONTRIBUTING.md`](CONTRIBUTING.md) for the workflow (start with
+an issue, not a PR) and the code conventions checklist. Security issues should go to
+[`SECURITY.md`](SECURITY.md)'s contact instead of a public issue. Licensed under
+[MIT](LICENSE).
