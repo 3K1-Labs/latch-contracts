@@ -5,31 +5,31 @@ extern crate std;
 use ed25519_dalek::{Signer as DalekSigner, SigningKey};
 use soroban_sdk::{Bytes, BytesN, Env, Vec};
 
-use super::{Ed25519PhantomVerifier, Ed25519PhantomVerifierClient, AUTH_PREFIX, PREFIX_LEN, SIGNED_MSG_LEN};
+use super::{
+    Ed25519PhantomVerifier, Ed25519PhantomVerifierClient, AUTH_PREFIX, PREFIX_LEN, SIGNED_MSG_LEN,
+};
 // ── helpers ──────────────────────────────────────────────────────────────────
 
 /// Generates a deterministic keypair from a fixed seed for testing.
 fn test_keypair() -> SigningKey {
     let secret: [u8; 32] = [
-        157, 97, 177, 157, 239, 253, 90, 96, 186, 132, 74, 244, 146, 236, 44, 196,
-        68, 73, 197, 105, 123, 50, 105, 25, 112, 59, 172, 3, 28, 174, 127, 96,
+        157, 97, 177, 157, 239, 253, 90, 96, 186, 132, 74, 244, 146, 236, 44, 196, 68, 73, 197,
+        105, 123, 50, 105, 25, 112, 59, 172, 3, 28, 174, 127, 96,
     ];
     SigningKey::from_bytes(&secret)
 }
 
 fn test_keypair_2() -> SigningKey {
     let secret: [u8; 32] = [
-        200, 100, 150, 200, 240, 250, 95, 100, 190, 140, 80, 250, 150, 240, 50, 200,
-        70, 80, 200, 110, 130, 55, 110, 30, 115, 65, 175, 10, 35, 180, 130, 100,
+        200, 100, 150, 200, 240, 250, 95, 100, 190, 140, 80, 250, 150, 240, 50, 200, 70, 80, 200,
+        110, 130, 55, 110, 30, 115, 65, 175, 10, 35, 180, 130, 100,
     ];
     SigningKey::from_bytes(&secret)
 }
 
 const TEST_PAYLOAD: [u8; 32] = [
-    0x4b, 0xb7, 0xa8, 0xb9, 0x96, 0x09, 0xb0, 0xb8,
-    0xb1, 0xd5, 0x34, 0x69, 0x4b, 0xb1, 0xf3, 0x1f,
-    0x12, 0x91, 0x38, 0xa2, 0xf2, 0xa1, 0x1f, 0x8e,
-    0x87, 0x02, 0xee, 0xdb, 0xb7, 0x92, 0x92, 0x2e,
+    0x4b, 0xb7, 0xa8, 0xb9, 0x96, 0x09, 0xb0, 0xb8, 0xb1, 0xd5, 0x34, 0x69, 0x4b, 0xb1, 0xf3, 0x1f,
+    0x12, 0x91, 0x38, 0xa2, 0xf2, 0xa1, 0x1f, 0x8e, 0x87, 0x02, 0xee, 0xdb, 0xb7, 0x92, 0x92, 0x2e,
 ];
 
 fn test_payload(e: &Env) -> Bytes {
@@ -177,7 +177,8 @@ fn verify_rejects_wrong_payload() {
     client.verify(&hash_b, &pub_key, &sig);
 }
 
-// ── canonicalize_key tests ────────────────────────────────────────────────────
+// ── canonicalize_key tests
+// ────────────────────────────────────────────────────
 
 #[test]
 fn canonicalize_key_is_identity() {
@@ -204,7 +205,8 @@ fn canonicalize_key_distinct_keys_produce_distinct_output() {
     assert_ne!(client.canonicalize_key(&key_a), client.canonicalize_key(&key_b));
 }
 
-// ── batch_canonicalize_key tests ──────────────────────────────────────────────
+// ── batch_canonicalize_key tests
+// ──────────────────────────────────────────────
 
 #[test]
 fn batch_canonicalize_key_preserves_order() {

@@ -8,8 +8,7 @@ use p256::{
 };
 use soroban_sdk::{xdr::ToXdr, Bytes, BytesN, Env, Vec};
 use stellar_accounts::verifiers::webauthn::{
-    WebAuthnSigData, AUTH_DATA_FLAGS_BE, AUTH_DATA_FLAGS_BS, AUTH_DATA_FLAGS_UP,
-    AUTH_DATA_FLAGS_UV,
+    WebAuthnSigData, AUTH_DATA_FLAGS_BE, AUTH_DATA_FLAGS_BS, AUTH_DATA_FLAGS_UP, AUTH_DATA_FLAGS_UV,
 };
 
 use super::{WebAuthnVerifier, WebAuthnVerifierClient};
@@ -20,8 +19,8 @@ use super::{WebAuthnVerifier, WebAuthnVerifierClient};
 /// Same seed used across all tests for reproducibility.
 fn test_signing_key() -> SigningKey {
     let secret_bytes: [u8; 32] = [
-        33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48,
-        49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64,
+        33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55,
+        56, 57, 58, 59, 60, 61, 62, 63, 64,
     ];
     let secret = SecretKey::from_slice(&secret_bytes).unwrap();
     SigningKey::from(&secret)
@@ -29,8 +28,8 @@ fn test_signing_key() -> SigningKey {
 
 fn test_signing_key_2() -> SigningKey {
     let secret_bytes: [u8; 32] = [
-        64, 63, 62, 61, 60, 59, 58, 57, 56, 55, 54, 53, 52, 51, 50, 49,
-        48, 47, 46, 45, 44, 43, 42, 41, 40, 39, 38, 37, 36, 35, 34, 33,
+        64, 63, 62, 61, 60, 59, 58, 57, 56, 55, 54, 53, 52, 51, 50, 49, 48, 47, 46, 45, 44, 43, 42,
+        41, 40, 39, 38, 37, 36, 35, 34, 33,
     ];
     let secret = SecretKey::from_slice(&secret_bytes).unwrap();
     SigningKey::from(&secret)
@@ -41,17 +40,15 @@ fn public_key_bytes(signing_key: &SigningKey) -> [u8; 65] {
     let point = signing_key.verifying_key().to_encoded_point(false);
     let bytes = point.as_bytes();
     let mut out = [0u8; 65];
-    out.copy_from_slice(&bytes);
+    out.copy_from_slice(bytes);
     out
 }
 
 // ── test payload ─────────────────────────────────────────────────────────────
 
 const TEST_PAYLOAD: [u8; 32] = [
-    0x4b, 0xb7, 0xa8, 0xb9, 0x96, 0x09, 0xb0, 0xb8,
-    0xb1, 0xd5, 0x34, 0x69, 0x4b, 0xb1, 0xf3, 0x1f,
-    0x12, 0x91, 0x38, 0xa2, 0xf2, 0xa1, 0x1f, 0x8e,
-    0x87, 0x02, 0xee, 0xdb, 0xb7, 0x92, 0x92, 0x2e,
+    0x4b, 0xb7, 0xa8, 0xb9, 0x96, 0x09, 0xb0, 0xb8, 0xb1, 0xd5, 0x34, 0x69, 0x4b, 0xb1, 0xf3, 0x1f,
+    0x12, 0x91, 0x38, 0xa2, 0xf2, 0xa1, 0x1f, 0x8e, 0x87, 0x02, 0xee, 0xdb, 0xb7, 0x92, 0x92, 0x2e,
 ];
 
 // ── WebAuthn assertion builders ──────────────────────────────────────────────
@@ -104,7 +101,8 @@ fn build_client_data(challenge: &str, type_field: &str) -> std::vec::Vec<u8> {
     json.into_bytes()
 }
 
-/// Signs a WebAuthn assertion over authenticatorData + clientDataJSON using a P-256 key.
+/// Signs a WebAuthn assertion over authenticatorData + clientDataJSON using a
+/// P-256 key.
 ///
 /// Step 19-20 of WebAuthn §7.2:
 ///   message = authenticatorData || SHA-256(clientData)
@@ -116,19 +114,13 @@ fn sign_assertion(
     authenticator_data: &[u8],
     client_data: &[u8],
 ) -> [u8; 64] {
-    let client_data_hash = e
-        .crypto()
-        .sha256(&Bytes::from_slice(e, client_data))
-        .to_array();
+    let client_data_hash = e.crypto().sha256(&Bytes::from_slice(e, client_data)).to_array();
 
     let mut message = std::vec::Vec::new();
     message.extend_from_slice(authenticator_data);
     message.extend_from_slice(&client_data_hash);
 
-    let digest = e
-        .crypto()
-        .sha256(&Bytes::from_slice(e, &message))
-        .to_array();
+    let digest = e.crypto().sha256(&Bytes::from_slice(e, &message)).to_array();
 
     let signature: P256Signature = signing_key.sign_prehash(&digest).unwrap();
     // normalize_s ensures low-S form required by Stellar secp256r1_verify
@@ -150,8 +142,8 @@ fn build_sig_data(
     type_override: Option<&str>,
 ) -> Bytes {
     let encoded_challenge = base64url_encode(payload);
-    let challenge_str = challenge_override
-        .unwrap_or_else(|| std::str::from_utf8(&encoded_challenge).unwrap());
+    let challenge_str =
+        challenge_override.unwrap_or_else(|| std::str::from_utf8(&encoded_challenge).unwrap());
     let type_str = type_override.unwrap_or("webauthn.get");
 
     let authenticator_data = build_authenticator_data(flags);
@@ -484,7 +476,8 @@ fn verify_rejects_wrong_payload() {
     client.verify(&different_hash, &key_data, &sig_data);
 }
 
-// ── canonicalize_key tests ────────────────────────────────────────────────────
+// ── canonicalize_key tests
+// ────────────────────────────────────────────────────
 
 #[test]
 fn canonicalize_key_strips_credential_id_suffix() {
@@ -546,7 +539,8 @@ fn canonicalize_key_rejects_short_input() {
     client.canonicalize_key(&short_key);
 }
 
-// ── batch_canonicalize_key tests ──────────────────────────────────────────────
+// ── batch_canonicalize_key tests
+// ──────────────────────────────────────────────
 
 #[test]
 fn batch_canonicalize_key_preserves_order() {
@@ -570,11 +564,7 @@ fn batch_canonicalize_key_preserves_order() {
 
     let keys = Vec::from_array(
         &e,
-        [
-            Bytes::from_slice(&e, &k1),
-            Bytes::from_slice(&e, &k2),
-            Bytes::from_slice(&e, &k3),
-        ],
+        [Bytes::from_slice(&e, &k1), Bytes::from_slice(&e, &k2), Bytes::from_slice(&e, &k3)],
     );
 
     let canonical = client.batch_canonicalize_key(&keys);

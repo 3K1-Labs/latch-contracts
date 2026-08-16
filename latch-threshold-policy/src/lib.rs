@@ -20,7 +20,13 @@ impl Policy for ThresholdPolicy {
         context_rule: ContextRule,
         smart_account: Address,
     ) {
-        simple_threshold::enforce(e, &context, &authenticated_signers, &context_rule, &smart_account)
+        simple_threshold::enforce(
+            e,
+            &context,
+            &authenticated_signers,
+            &context_rule,
+            &smart_account,
+        )
     }
 
     fn install(
@@ -43,7 +49,12 @@ impl ThresholdPolicy {
         simple_threshold::get_threshold(e, context_rule_id, &smart_account)
     }
 
-    pub fn set_threshold(e: Env, threshold: u32, context_rule: ContextRule, smart_account: Address) {
+    pub fn set_threshold(
+        e: Env,
+        threshold: u32,
+        context_rule: ContextRule,
+        smart_account: Address,
+    ) {
         simple_threshold::set_threshold(&e, threshold, &context_rule, &smart_account)
     }
 }

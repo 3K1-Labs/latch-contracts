@@ -4,8 +4,9 @@ use soroban_sdk::{contract, contractimpl, Bytes, BytesN, Env, Vec};
 use stellar_accounts::verifiers::{ed25519 as oz_ed25519, Verifier};
 
 /// The prefix Phantom wallet prepends before signing.
-/// Phantom rejects raw 32-byte payloads (indistinguishable from Solana tx hashes),
-/// so the client constructs: AUTH_PREFIX + hex(auth_payload_hash) and signs that.
+/// Phantom rejects raw 32-byte payloads (indistinguishable from Solana tx
+/// hashes), so the client constructs: AUTH_PREFIX + hex(auth_payload_hash) and
+/// signs that.
 const AUTH_PREFIX: &[u8] = b"Stellar Smart Account Auth:\n";
 const PREFIX_LEN: usize = 28;
 const PAYLOAD_LEN: usize = 32;
@@ -20,10 +21,12 @@ impl Verifier for Ed25519PhantomVerifier {
     type KeyData = BytesN<32>;
     type SigData = BytesN<64>;
 
-    /// Verify a Phantom-produced Ed25519 signature over the Latch signing convention.
+    /// Verify a Phantom-produced Ed25519 signature over the Latch signing
+    /// convention.
     ///
-    /// The client signs: `"Stellar Smart Account Auth:\n" + lowercase_hex(auth_payload_hash)`
-    /// This contract reconstructs that message from `hash` and verifies `sig_data` against it.
+    /// The client signs: `"Stellar Smart Account Auth:\n" +
+    /// lowercase_hex(auth_payload_hash)` This contract reconstructs that
+    /// message from `hash` and verifies `sig_data` against it.
     ///
     /// Panics with `Error(Crypto, InvalidInput)` if the signature is invalid.
     fn verify(e: &Env, hash: Bytes, key_data: BytesN<32>, sig_data: BytesN<64>) -> bool {
@@ -46,7 +49,8 @@ impl Verifier for Ed25519PhantomVerifier {
 
     /// Returns the canonical 32-byte representation of the Ed25519 public key.
     ///
-    /// Ed25519 keys have exactly one canonical encoding — this is a pass-through.
+    /// Ed25519 keys have exactly one canonical encoding — this is a
+    /// pass-through.
     fn canonicalize_key(e: &Env, key_data: BytesN<32>) -> Bytes {
         oz_ed25519::canonicalize_key(e, &key_data)
     }
