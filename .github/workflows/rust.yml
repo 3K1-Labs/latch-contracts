@@ -14,12 +14,11 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  # Computed once and shared by every matrix entry below, instead of
-  # OZ's single-job version, since we have a matrix to gate uniformly.
-  # This is a required status check target for some workflows, so it must
-  # always report — the matrix jobs below skip their heavy steps on a
-  # docs-only change, but still run and report success, so a required
-  # check never sits at "Expected — waiting for status to be reported".
+  # Computed once and shared by every job below. This is a required status
+  # check target for some workflows, so it must always report — the jobs
+  # below skip their heavy steps on a docs-only change, but still run and
+  # report success, so a required check never sits at "Expected — waiting
+  # for status to be reported".
   changes:
     runs-on: ubuntu-latest
     outputs:
@@ -34,6 +33,27 @@ jobs:
             code:
               - '!**/*.md'
 
+  # A single Cargo workspace now covers every crate, so `cargo fmt --all`
+  # checks all of them in one pass regardless of working directory — running
+  # it once here instead of inside every matrix entry below avoids checking
+  # the whole workspace redundantly N times.
+  fmt:
+    needs: changes
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        if: needs.changes.outputs.code == 'true'
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          toolchain: nightly
+          components: rustfmt
+
+      - name: Check format (whole workspace)
+        if: needs.changes.outputs.code == 'true'
+        run: cargo +nightly fmt --all -- --check
+
   build-and-test:
     needs: changes
     runs-on: ubuntu-latest
@@ -41,8 +61,10 @@ jobs:
       fail-fast: false
       matrix:
         workspace:
-          - latch-account-factory
           - latch-smart-account
+          - latch-account-factory/contracts/factory-contract
+          - latch-account-factory/contracts/dummy-account
+          - latch-account-factory/contracts/dummy-singleton
           - latch-threshold-policy
           - latch-verifiers/ed25519-phantom-verifier
           - latch-verifiers/secp256k1-verifier
@@ -57,17 +79,12 @@ jobs:
         if: needs.changes.outputs.code == 'true'
         uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
-          toolchain: stable, nightly
-          components: clippy, rustfmt
-
-      - name: Check format (${{ matrix.workspace }})
-        if: needs.changes.outputs.code == 'true'
-        run: cargo +nightly fmt --all -- --check
-        working-directory: ${{ matrix.workspace }}
+          toolchain: stable
+          components: clippy
 
       - name: Check clippy (${{ matrix.workspace }})
         if: needs.changes.outputs.code == 'true'
-        run: cargo +stable clippy --all-targets --all-features -- -D warnings
+        run: cargo clippy --all-targets --all-features -- -D warnings
         working-directory: ${{ matrix.workspace }}
 
       - name: Build (${{ matrix.workspace }})

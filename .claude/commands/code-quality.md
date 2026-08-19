@@ -25,30 +25,32 @@ called out explicitly below rather than silently inherited.
 
 ## Repository shape
 
-Unlike OZ's `stellar-contracts`, this repo is **not** one Cargo workspace.
-Every top-level crate is its own independent workspace (`[workspace] members
-= ["."]`), with its own `Cargo.lock` and its own pin of the `stellar-accounts`
-git dependency:
+Like OZ's `stellar-contracts`, this repo is **one Cargo workspace** — the root
+`Cargo.toml` lists every crate below as a member, and `[workspace.dependencies]`
+pins `soroban-sdk` and `stellar-accounts` (from crates.io, not a git rev) once
+for all of them to share:
 
 ```
-latch-smart-account/            # the account contract itself
-latch-account-factory/          # workspace of 3 members:
-  contracts/factory-contract/   #   the factory
-  contracts/dummy-account/      #   test-only stub
-  contracts/dummy-singleton/    #   test-only stub
-latch-threshold-policy/         # thin wrapper around OZ's simple_threshold
+latch-smart-account/                # the account contract itself
+latch-account-factory/contracts/
+  factory-contract/                 # the factory
+  dummy-account/                    # test-only stub, no tests of its own
+  dummy-singleton/                  # test-only stub, no tests of its own
+latch-threshold-policy/             # thin wrapper around OZ's simple_threshold
 latch-verifiers/
   ed25519-phantom-verifier/
-  secp256k1-verifier/           # stub, not yet implemented
+  secp256k1-verifier/               # stub, not yet implemented
   webauthn-verifier/
-session-policy/                 # method-allowlist policy (own logic)
-spending-limit-policy/          # thin wrapper around OZ's spending_limit
+session-policy/                     # method-allowlist policy (own logic)
+spending-limit-policy/              # thin wrapper around OZ's spending_limit
 ```
 
-Because each crate pins `stellar-accounts` independently, they can drift out
-of sync with each other and with upstream. See the memory entry on auditing
-the OZ pin (`oz_stellar_contracts_drift_check`) before assuming any two
-crates are on the same revision.
+One shared `Cargo.lock`, one `stellar-accounts` version for everything —
+bumping it is a single-line change instead of nine. `cargo build`/`test`/
+`clippy` still scope to one crate when run from inside its directory (or with
+`--package <name>`); only `cargo fmt --all` always covers the whole workspace
+regardless of cwd. See the memory entry on auditing the OZ pin
+(`oz_stellar_contracts_drift_check`) for how to check it against upstream.
 
 ## Usage
 
@@ -102,14 +104,14 @@ cancel entirely. If the list is empty, say so and stop.
 
 ### 5. Apply fixes
 
-Use the `Edit` tool. After all edits, run from the crate's own directory
-(each crate is its own workspace — there is no repo-wide `cargo` command):
+Use the `Edit` tool. After all edits, run from the repo root (fmt covers the
+whole workspace regardless of cwd) then from the crate's own directory:
 
 ```bash
-cd <crate-dir>
-
 # Format (NIGHTLY required — rustfmt.toml uses unstable_features)
 cargo +nightly fmt --all
+
+cd <crate-dir>
 
 # Lint, warnings as errors
 cargo clippy --all-targets --all-features -- -D warnings
@@ -123,7 +125,9 @@ can't be fixed, stop and escalate to the user.
 
 ```bash
 cargo test
-cargo build --target wasm32v1-none --release   # or: stellar contract build
+stellar contract build   # NOT `cargo build --target wasm32v1-none` — that
+                          # fails: soroban-sdk's experimental_spec_shaking_v2
+                          # feature requires going through the Stellar CLI
 cargo doc --no-deps
 ```
 
@@ -230,16 +234,19 @@ crate is actually doing:
 
 ### Cargo.toml shape
 
-- Each crate declares its own `[workspace] resolver = "2" members = ["."]` —
-  do not fold crates into one shared workspace; they're deployed and
-  versioned independently.
-- `[dependencies]` and `[dev-dependencies]` both pin the exact same
-  `stellar-accounts` git `rev`. When bumping one, bump both in the same
-  crate, and check whether sibling crates need the same bump.
-- `[profile.release]` / `[profile.release-with-logs]` blocks are duplicated
-  verbatim across crates. That's acceptable at this scale; if it becomes
-  hard to keep in sync, that's a signal to revisit, not a rule violation
-  today.
+- One workspace, defined in the root `Cargo.toml`. New crates get added to
+  its `members` list — they do not declare their own `[workspace]` table.
+- `soroban-sdk` and `stellar-accounts` are pinned once in the root
+  `[workspace.dependencies]` (from crates.io, e.g. `"=0.7.2"`, not a git
+  `rev`). Member crates reference them as `{ workspace = true }` in both
+  `[dependencies]` and `[dev-dependencies]` — never an inline version string.
+  A crate-specific extra dependency used by only one or two crates (e.g.
+  `ed25519-dalek` in `ed25519-phantom-verifier`, `p256` in
+  `webauthn-verifier`) stays a direct dependency in that crate's own
+  `Cargo.toml`, not promoted to the workspace level.
+- `[profile.release]` / `[profile.release-with-logs]` live once in the root
+  `Cargo.toml` — Cargo only honors profile tables in the workspace root: a
+  `[profile.*]` table in a member crate's `Cargo.toml` is silently ignored.
 
 ### Imports
 

@@ -1,9 +1,3 @@
-[workspace]
-resolver = "2"
-members = [
-  ".",
-]
-
 [package]
 name = "secp256k1-verifier"
 version = "0.0.0"
@@ -15,22 +9,8 @@ crate-type = ["lib", "cdylib"]
 doctest = false
 
 [dependencies]
-soroban-sdk = "25.0.2"
-stellar-accounts = { git = "https://github.com/OpenZeppelin/stellar-contracts.git", rev = "187ad25428a21bf829fb6f123238e3cddb24e02a", package = "stellar-accounts" }
+soroban-sdk = { workspace = true }
+stellar-accounts = { workspace = true }
 
 [dev-dependencies]
-soroban-sdk = { version = "25.0.2", features = ["testutils"] }
-
-[profile.release]
-opt-level = "z"
-overflow-checks = true
-debug = 0
-strip = "symbols"
-debug-assertions = false
-panic = "abort"
-codegen-units = 1
-lto = true
-
-[profile.release-with-logs]
-inherits = "release"
-debug-assertions = true
+soroban-sdk = { workspace = true, features = ["testutils"] }
