@@ -33,23 +33,28 @@ guide for how this works.
 
 ## Repository Layout
 
-This repo is **not** a single Cargo workspace — every top-level crate is its
-own independent workspace with its own `Cargo.lock`:
+This repo is a **single Cargo workspace** — every crate below is a member,
+sharing one `Cargo.lock` and one pinned `stellar-accounts` version:
 
 ```
-latch-smart-account/            the account contract
-latch-account-factory/          factory + deploy-time test stubs
-latch-threshold-policy/         wraps OZ's simple_threshold policy
+latch-smart-account/                          the account contract
+latch-account-factory/contracts/
+  factory-contract/                           the factory itself
+  dummy-account/                               test-only stub, no tests of its own
+  dummy-singleton/                             test-only stub, no tests of its own
+latch-threshold-policy/                        wraps OZ's simple_threshold policy
 latch-verifiers/
   ed25519-phantom-verifier/
-  secp256k1-verifier/           stub, not yet implemented
+  secp256k1-verifier/                          stub, not yet implemented
   webauthn-verifier/
-session-policy/                 method-allowlist policy
-spending-limit-policy/          wraps OZ's spending_limit policy
+session-policy/                                method-allowlist policy
+spending-limit-policy/                         wraps OZ's spending_limit policy
 ```
 
-All commands below (`cargo test`, etc.) are run from inside the specific
-crate directory you're working on, not the repo root.
+`cargo +nightly fmt --all -- --check` runs against the whole workspace
+regardless of where you invoke it. Everything else (`cargo test`, `cargo
+clippy`, etc.) scopes to whichever crate directory you're in — `cd` into
+the specific crate you're working on before running them.
 
 ## A Typical Workflow
 
@@ -75,10 +80,11 @@ crate directory you're working on, not the repo root.
 4. Run the checklist below and make sure it passes before opening a PR:
 
     ```bash
-    cd <crate-you-changed>
-
     # Format (NIGHTLY required — rustfmt.toml uses unstable_features)
+    # Runs against the whole workspace no matter where you are.
     cargo +nightly fmt --all -- --check
+
+    cd <crate-you-changed>
 
     # Lint
     cargo clippy --all-targets --all-features -- -D warnings
@@ -86,9 +92,9 @@ crate directory you're working on, not the repo root.
     # Test
     cargo test
 
-    # WASM release build
-    cargo build --target wasm32v1-none --release
-    # or, equivalently:
+    # WASM release build — must go through the Stellar CLI (stellar-cli
+    # v25.2.0+); a plain `cargo build --target wasm32v1-none` fails, since
+    # soroban-sdk's experimental_spec_shaking_v2 feature requires it
     stellar contract build
 
     # Doc check

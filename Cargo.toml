@@ -1,11 +1,21 @@
 [workspace]
 resolver = "2"
 members = [
-  "contracts/*",
+  "latch-smart-account",
+  "latch-account-factory/contracts/factory-contract",
+  "latch-account-factory/contracts/dummy-account",
+  "latch-account-factory/contracts/dummy-singleton",
+  "latch-threshold-policy",
+  "latch-verifiers/ed25519-phantom-verifier",
+  "latch-verifiers/secp256k1-verifier",
+  "latch-verifiers/webauthn-verifier",
+  "session-policy",
+  "spending-limit-policy",
 ]
 
 [workspace.dependencies]
-soroban-sdk = "25"
+soroban-sdk = "26.1.0"
+stellar-accounts = "=0.7.2"
 
 [profile.release]
 opt-level = "z"

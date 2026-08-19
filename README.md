@@ -11,19 +11,25 @@ The system is built on the [OpenZeppelin Stellar Contracts](https://github.com/O
 
 ## Repository Structure
 
-This repository uses a **one-workspace-per-contract-group** layout. Each contract lives in its own root-level Rust workspace so that build, test, and deployment scopes stay small and independent.
+This repository is a **single Cargo workspace** — every contract is a member crate, sharing one
+`Cargo.lock` and one pinned `stellar-accounts` version, built/tested independently via
+`--package`.
 
 ```
 latch-contracts/
-├── latch-account-factory/       # ✅ Complete — Factory contract workspace
-├── latch-smart-account/         # ✅ Smart account contract workspace
-├── latch-verifiers/             # ⚠️ Verifier contracts workspace
+├── latch-account-factory/
+│   └── contracts/
+│       ├── factory-contract/    # ✅ Complete — the factory itself
+│       ├── dummy-account/       # Test-only stub used by factory-contract's tests
+│       └── dummy-singleton/     # Test-only stub used by factory-contract's tests
+├── latch-smart-account/         # ✅ Smart account contract
+├── latch-verifiers/             # ⚠️ Verifier contracts
 │   ├── ed25519-phantom-verifier/
 │   ├── secp256k1-verifier/      # Stub — implementation pending
 │   └── webauthn-verifier/
-├── latch-threshold-policy/      # ✅ Threshold policy workspace
-├── session-policy/              # ✅ Method-allowlist (session key) policy workspace
-├── spending-limit-policy/       # ✅ Spending-limit policy workspace
+├── latch-threshold-policy/      # ✅ Threshold policy
+├── session-policy/              # ✅ Method-allowlist (session key) policy
+├── spending-limit-policy/       # ✅ Spending-limit policy
 ├── factory-spec.md              # Behavioral spec for the factory
 ├── UPGRADE_PATH.md              # Account & factory upgrade path decision
 └── PLAN.md                      # v1 architecture plan
@@ -97,16 +103,18 @@ cargo install --locked stellar-cli
 
 ### Build and test
 
-Each crate above is its own independent Cargo workspace — run commands from inside the specific
-crate directory, not the repo root:
+`cargo +nightly fmt --all -- --check` formats/checks the whole workspace regardless of where you
+run it from. Everything else scopes to one crate at a time — either `cd` into the crate directory
+or pass `--package <name>` from the repo root (package names don't always match directory names,
+e.g. `latch-smart-account`'s package is `smart-account` — see each crate's own `Cargo.toml`):
 
 ```bash
-cd latch-smart-account   # or any other crate listed above
+cargo +nightly fmt --all -- --check                          # whole workspace
 
-cargo +nightly fmt --all -- --check   # formatting
-cargo clippy --all-targets --all-features -- -D warnings   # lint
-cargo test                            # unit + integration tests
-stellar contract build                # WASM build
+cd latch-smart-account   # or any other crate listed above
+cargo clippy --all-targets --all-features -- -D warnings     # lint, this crate only
+cargo test                                                   # unit + integration tests
+stellar contract build                                       # WASM build
 ```
 
 ## Spec and Planning
