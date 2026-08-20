@@ -35,7 +35,6 @@ Those belong to other contracts.
 ```rust
 enum SignerKind {
     Ed25519,
-    Secp256k1,
     WebAuthn,
 }
 ```
@@ -98,7 +97,6 @@ The factory stores immutable wasm hashes for:
 
 - `smart-account`
 - `ed25519-verifier`
-- `secp256k1-verifier`
 - `webauthn-verifier`
 - `threshold-policy`
 
@@ -108,7 +106,6 @@ Example config shape:
 struct FactoryConfig {
     smart_account_wasm_hash: BytesN<32>,
     ed25519_verifier_wasm_hash: BytesN<32>,
-    secp256k1_verifier_wasm_hash: BytesN<32>,
     webauthn_verifier_wasm_hash: BytesN<32>,
     threshold_policy_wasm_hash: BytesN<32>,
 }
@@ -208,22 +205,6 @@ Factory checks:
 - first byte is `0x04`
 
 The verifier is responsible for actual signature and assertion verification.
-
-### 7.4 Secp256k1
-
-Provisional v1 format:
-
-- 65-byte uncompressed secp256k1 public key
-
-Factory checks:
-
-- `key_data.len() == 65`
-- first byte is `0x04`
-
-Note:
-
-- this format is provisional until the verifier spec is finalized
-- current recommendation is to keep this format because it aligns well with recovery-based verification
 
 ## 8. Canonicalization Rules
 
@@ -330,8 +311,7 @@ Recommended v1 mapping:
 
 - `Delegated(Address) = 0x00`
 - `Ed25519 = 0x01`
-- `Secp256k1 = 0x02`
-- `WebAuthn = 0x03`
+- `WebAuthn = 0x02`
 
 These encoded values are part of the deterministic address-derivation surface and must not be changed within v1.
 
@@ -380,7 +360,6 @@ The following must always hold:
 The factory may lazily deploy these shared contracts:
 
 - `ed25519-verifier`
-- `secp256k1-verifier`
 - `webauthn-verifier`
 - `threshold-policy`
 
@@ -391,7 +370,6 @@ These are singleton contracts scoped to the factory version.
 Recommended deterministic salts:
 
 - `latch.factory.verifier.ed25519.v1`
-- `latch.factory.verifier.secp256k1.v1`
 - `latch.factory.verifier.webauthn.v1`
 - `latch.factory.policy.threshold.v1`
 
@@ -556,7 +534,7 @@ Input:
 ```rust
 signers = [
   Delegated(<G-address-backed Address A>),
-  External({ signer_kind: Secp256k1, key_data: <65-byte pubkey B> }),
+  External({ signer_kind: Ed25519, key_data: <32-byte pubkey B> }),
   External({ signer_kind: WebAuthn, key_data: <65-byte p256 pubkey + credential id> }),
 ]
 threshold = Some(2)
@@ -590,19 +568,7 @@ Behavior:
 - reject
 - multisig requires explicit threshold
 
-## 17. Open Item
-
-Only one item remains provisional in this spec:
-
-- final `secp256k1` verifier encoding details
-
-Current recommendation:
-
-- `key_data` = 65-byte uncompressed secp256k1 public key
-- factory validates length and prefix only
-- verifier performs cryptographic recovery and equality check
-
-## 18. Product Guidance for Salts
+## 17. Product Guidance for Salts
 
 The deterministic `account_salt` should be treated as protocol input, not presentation metadata.
 

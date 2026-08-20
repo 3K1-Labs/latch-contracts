@@ -3,7 +3,7 @@
 
 ## Overview
 
-Soroban smart contracts for the Latch auth layer. Provides deterministic smart account creation with support for Ed25519, Secp256k1, and WebAuthn signers.
+Soroban smart contracts for the Latch auth layer. Provides deterministic smart account creation with support for Ed25519 and WebAuthn signers.
 
 Latch accounts are Soroban smart accounts — programmable wallets that replace private-key-only authorization with flexible multi-signer, multi-policy authorization. Users can sign transactions with a Phantom wallet, a MetaMask wallet, a passkey (Face ID, Touch ID, fingerprint), or any combination of the three.
 
@@ -25,7 +25,7 @@ latch-contracts/
 ├── latch-smart-account/         # ✅ Smart account contract
 ├── latch-verifiers/             # ⚠️ Verifier contracts
 │   ├── ed25519-phantom-verifier/
-│   ├── secp256k1-verifier/      # Stub — implementation pending
+│   ├── secp256k1-verifier/      # Stub — not wired into the factory, unused in v1
 │   └── webauthn-verifier/
 ├── latch-threshold-policy/      # ✅ Threshold policy
 ├── session-policy/              # ✅ Method-allowlist (session key) policy
@@ -61,8 +61,8 @@ Stateless singleton contracts that verify signatures on behalf of smart accounts
 | Contract | Signer type | Key format | Status |
 |---|---|---|---|
 | `ed25519-phantom-verifier` | Phantom, Stellar wallets | 32-byte Ed25519 public key | ✅ Implemented |
-| `secp256k1-verifier` | MetaMask, EVM wallets | 65-byte uncompressed secp256k1 key | 🔜 Stub |
 | `webauthn-verifier` | Passkeys, Face ID, Touch ID, YubiKey | 65-byte P-256 key + credential ID | ✅ Implemented |
+| `secp256k1-verifier` | MetaMask, EVM wallets | 65-byte uncompressed secp256k1 key | 🔜 Stub, not wired into the factory |
 
 ### Threshold Policy — `latch-threshold-policy/` ✅
 
@@ -83,10 +83,9 @@ Before a factory can be deployed, all singleton contracts must already exist on 
 ```
 1. stellar contract install   # upload smart account wasm, capture hash
 2. stellar contract deploy    ed25519-verifier
-3. stellar contract deploy    secp256k1-verifier
-4. stellar contract deploy    webauthn-verifier
-5. stellar contract deploy    threshold-policy
-6. stellar contract deploy    factory  (pass smart_account_wasm_hash + 4 addresses)
+3. stellar contract deploy    webauthn-verifier
+4. stellar contract deploy    threshold-policy
+5. stellar contract deploy    factory  (pass smart_account_wasm_hash + 3 addresses)
 ```
 
 ## Development

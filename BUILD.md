@@ -85,7 +85,7 @@ batch_canonicalize_key
 
 ## Secp256k1 Verifier (stub)
 
-> **Placeholder only.** `verify` panics with `NotImplemented`. Do not create secp256k1 accounts against this deployment.
+> **Placeholder only, and no longer wired into the factory.** `verify` panics with `NotImplemented`. `Secp256k1` was removed from the factory's `SignerKind` — this deployment is unused by any current factory instance.
 
 | Field | Value |
 |---|---|
@@ -136,6 +136,11 @@ set_threshold
 ---
 
 ## Account Factory
+
+> **Stale.** This deployment predates the removal of `Secp256k1` from the factory's
+> `SignerKind`/`FactoryConfig`/constructor (5 args → 4 args, secp256k1 verifier dropped). The wasm
+> hash and constructor args below no longer match current source. Redeploy before relying on this
+> record.
 
 | Field | Value |
 |---|---|

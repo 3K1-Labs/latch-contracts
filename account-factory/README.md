@@ -27,12 +27,11 @@ fn __constructor(
     env: Env,
     smart_account_wasm_hash: BytesN<32>,
     ed25519_verifier: Address,
-    secp256k1_verifier: Address,
     webauthn_verifier: Address,
     threshold_policy: Address,
 )
 ```
-Stores config as immutable instance storage. All four singleton addresses must point to deployed contracts — validated at construction. Calling again panics with `AlreadyInitialized`.
+Stores config as immutable instance storage. All three singleton addresses must point to deployed contracts — validated at construction. Calling again panics with `AlreadyInitialized`.
 
 **`get_account_address`** — pure computation, no deployment:
 ```rust
@@ -62,7 +61,6 @@ External signer key shapes:
 | Kind | `key_data` | Notes |
 |---|---|---|
 | `Ed25519` | 32 bytes | Standard Stellar/Phantom key format |
-| `Secp256k1` | 65 bytes, first byte `0x04` | MetaMask, Rabby, EVM wallets |
 | `WebAuthn` | > 65 bytes, first byte `0x04` | Face ID, Touch ID, Windows Hello, YubiKey (P-256 pubkey + credential ID) |
 
 The factory does **shape validation only** — length and prefix checks. Cryptographic verification is the verifier's job.
@@ -77,7 +75,7 @@ LatchAccountSaltV1 = SHA256(
   account_salt                ||   // 32 bytes
   signer_count                ||   // 4 bytes big-endian
   for each canonical signer:
-    signer_code               ||   // 1 byte: 0x00=Delegated, 0x01=Ed25519, 0x02=Secp256k1, 0x03=WebAuthn
+    signer_code               ||   // 1 byte: 0x00=Delegated, 0x01=Ed25519, 0x02=WebAuthn
     signer_data_length        ||   // 4 bytes big-endian
     signer_data               ||   // XDR address (Delegated) or key_data (External)
   effective_threshold              // 4 bytes big-endian
@@ -104,9 +102,8 @@ Single-signer accounts get no policy. Multi-signer accounts get `SimpleThreshold
 | Threshold `= 0` or `> n` | `InvalidThreshold` |
 | Single-signer with threshold `> 1` | `InvalidThreshold` |
 | Ed25519 `key_data.len() != 32` | `InvalidEd25519Key` |
-| Secp256k1 `key_data.len() != 65` or first byte `!= 0x04` | `InvalidSecp256k1Key` |
 | WebAuthn `key_data.len() <= 65` or first byte `!= 0x04` | `InvalidWebAuthnKey` |
-| Singleton address not deployed | `InvalidEd25519/Secp256k1/WebAuthn/ThresholdPolicy Verifier` |
+| Singleton address not deployed | `InvalidEd25519/WebAuthn/ThresholdPolicy Verifier` |
 | Constructor called twice | `AlreadyInitialized` |
 
 ---

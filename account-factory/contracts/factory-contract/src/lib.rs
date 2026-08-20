@@ -19,7 +19,6 @@ pub enum DataKey {
 pub struct FactoryConfig {
     pub smart_account_wasm_hash: BytesN<32>,
     pub ed25519_verifier: Address,
-    pub secp256k1_verifier: Address,
     pub webauthn_verifier: Address,
     pub threshold_policy: Address,
 }
@@ -28,7 +27,6 @@ pub struct FactoryConfig {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum SignerKind {
     Ed25519,
-    Secp256k1,
     WebAuthn,
 }
 
@@ -65,10 +63,8 @@ pub enum FactoryError {
     MissingThreshold = 5,
     InvalidThreshold = 6,
     InvalidEd25519Key = 7,
-    InvalidSecp256k1Key = 8,
     InvalidWebAuthnKey = 9,
     InvalidEd25519Verifier = 10,
-    InvalidSecp256k1Verifier = 11,
     InvalidWebAuthnVerifier = 12,
     InvalidThresholdPolicy = 13,
 }
@@ -87,7 +83,6 @@ impl Contract {
         env: Env,
         smart_account_wasm_hash: BytesN<32>,
         ed25519_verifier: Address,
-        secp256k1_verifier: Address,
         webauthn_verifier: Address,
         threshold_policy: Address,
     ) {
@@ -95,18 +90,12 @@ impl Contract {
             panic_with_error!(&env, FactoryError::AlreadyInitialized);
         }
         validate_singleton_address(&env, &ed25519_verifier, FactoryError::InvalidEd25519Verifier);
-        validate_singleton_address(
-            &env,
-            &secp256k1_verifier,
-            FactoryError::InvalidSecp256k1Verifier,
-        );
         validate_singleton_address(&env, &webauthn_verifier, FactoryError::InvalidWebAuthnVerifier);
         validate_singleton_address(&env, &threshold_policy, FactoryError::InvalidThresholdPolicy);
 
         let config = FactoryConfig {
             smart_account_wasm_hash,
             ed25519_verifier,
-            secp256k1_verifier,
             webauthn_verifier,
             threshold_policy,
         };
@@ -145,7 +134,6 @@ impl Contract {
         let config = get_config(&env);
         match signer_kind {
             SignerKind::Ed25519 => config.ed25519_verifier,
-            SignerKind::Secp256k1 => config.secp256k1_verifier,
             SignerKind::WebAuthn => config.webauthn_verifier,
         }
     }
@@ -255,11 +243,6 @@ fn validate_signer_shape(env: &Env, signer: &AccountSignerInit) {
                     panic_with_error!(env, FactoryError::InvalidEd25519Key);
                 }
             }
-            SignerKind::Secp256k1 => {
-                if external.key_data.len() != 65 || external.key_data.get(0).unwrap_or(0) != 0x04 {
-                    panic_with_error!(env, FactoryError::InvalidSecp256k1Key);
-                }
-            }
             SignerKind::WebAuthn => {
                 if external.key_data.len() <= 65 || external.key_data.get(0).unwrap_or(0) != 0x04 {
                     panic_with_error!(env, FactoryError::InvalidWebAuthnKey);
@@ -289,7 +272,6 @@ fn build_account_signers(
             AccountSignerInit::External(external) => {
                 let verifier = match external.signer_kind {
                     SignerKind::Ed25519 => config.ed25519_verifier.clone(),
-                    SignerKind::Secp256k1 => config.secp256k1_verifier.clone(),
                     SignerKind::WebAuthn => config.webauthn_verifier.clone(),
                 };
                 account_signers.push_back(Signer::External(verifier, external.key_data));
@@ -350,8 +332,7 @@ fn account_signer_code(signer: &AccountSignerInit) -> u8 {
 fn signer_kind_code(kind: SignerKind) -> u8 {
     match kind {
         SignerKind::Ed25519 => 0x01,
-        SignerKind::Secp256k1 => 0x02,
-        SignerKind::WebAuthn => 0x03,
+        SignerKind::WebAuthn => 0x02,
     }
 }
 
