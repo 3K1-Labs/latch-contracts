@@ -48,6 +48,7 @@ latch-verifiers/
   webauthn-verifier/
 policies/
   threshold-policy/                            wraps OZ's simple_threshold policy
+  weighted-threshold-policy/                   wraps OZ's weighted_threshold policy
   session-policy/                              method-allowlist policy
   spending-limit-policy/                       wraps OZ's spending_limit policy
 ```

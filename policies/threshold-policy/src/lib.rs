@@ -1,3 +1,23 @@
+//! Thin `#[contract]` wrapper around OZ's `simple_threshold` policy —
+//! `stellar_accounts::policies::simple_threshold`. All logic lives upstream;
+//! this crate only supplies the deployable contract shell.
+//!
+//! # Security Warning: Signer Set Divergence
+//!
+//! The threshold is validated against the signer count only at install time.
+//! It is **not automatically updated** when signers are later added to or
+//! removed from the account's `ContextRule`. Left unattended, this causes:
+//!
+//! - **DoS**: removing signers can drop the count below the stored threshold,
+//!   permanently blocking any action this policy governs until the threshold is
+//!   lowered.
+//! - **Silent security degradation**: adding signers without raising the
+//!   threshold quietly turns a strict N-of-N into a weaker N-of-(N+M).
+//!
+//! Whoever administers signer changes on an account using this policy
+//! **must** call `set_threshold` in the same transaction — before removing
+//! signers, or after adding them. See OZ's `simple_threshold` module docs
+//! for the full writeup and worked examples.
 #![no_std]
 
 use soroban_sdk::{auth::Context, contract, contractimpl, Address, Env, Vec};

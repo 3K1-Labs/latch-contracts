@@ -28,9 +28,10 @@ latch-contracts/
 │   ├── secp256k1-verifier/      # Stub — not wired into the factory, unused in v1
 │   └── webauthn-verifier/
 ├── policies/                    # Policy contracts
-│   ├── threshold-policy/        # ✅ Threshold policy
-│   ├── session-policy/          # ✅ Method-allowlist (session key) policy
-│   └── spending-limit-policy/   # ✅ Spending-limit policy
+│   ├── threshold-policy/            # ✅ Simple (unweighted) threshold policy
+│   ├── weighted-threshold-policy/   # ✅ Weighted threshold policy
+│   ├── session-policy/              # ✅ Method-allowlist (session key) policy
+│   └── spending-limit-policy/       # ✅ Spending-limit policy
 ├── factory-spec.md              # Behavioral spec for the factory
 ├── UPGRADE_PATH.md              # Account & factory upgrade path decision
 └── PLAN.md                      # v1 architecture plan
@@ -67,7 +68,11 @@ Stateless singleton contracts that verify signatures on behalf of smart accounts
 
 ### Threshold Policy — `policies/threshold-policy/` ✅
 
-OZ simple threshold policy. Enforces M-of-N authorization for multisig accounts. Deployed as a singleton shared across all multisig accounts.
+OZ simple threshold policy. Enforces M-of-N authorization for multisig accounts, all signers weighted equally. Deployed as a singleton shared across all multisig accounts, and the one the factory installs automatically for multi-signer accounts (see `AccountInitParams.threshold`).
+
+### Weighted Threshold Policy — `policies/weighted-threshold-policy/` ✅
+
+OZ weighted threshold policy — each signer gets an individual weight, and a minimum total weight is required for authorization (e.g. CEO=100, CTO=75, CFO=75, threshold=150). Not wired into the factory's automatic multisig install — install it on an existing account with `add_policy` when equal-weight M-of-N isn't the right shape. **Carries the same signer-set-divergence footgun as the simple threshold policy** (see the crate's module doc): weights and threshold are frozen at install time and must be updated manually via `set_signer_weight`/`set_threshold` whenever the signer set changes, or authorization can silently weaken or permanently lock.
 
 ### Session Policy — `policies/session-policy/` ✅
 

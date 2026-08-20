@@ -17,6 +17,7 @@ body:
         - latch-verifiers/secp256k1-verifier
         - latch-verifiers/webauthn-verifier
         - policies/threshold-policy
+        - policies/weighted-threshold-policy
         - policies/session-policy
         - policies/spending-limit-policy
         - Other / not sure

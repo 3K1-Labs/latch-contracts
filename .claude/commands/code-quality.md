@@ -42,6 +42,7 @@ latch-verifiers/
   webauthn-verifier/
 policies/
   threshold-policy/                 # thin wrapper around OZ's simple_threshold
+  weighted-threshold-policy/        # thin wrapper around OZ's weighted_threshold
   session-policy/                   # method-allowlist policy (own logic)
   spending-limit-policy/            # thin wrapper around OZ's spending_limit
 ```
@@ -89,7 +90,7 @@ Walk the file set against **two** reference points:
 
 1. **The rules in the `Rules` section below.**
 2. **The closest existing sibling crate.** A "thin wrapper" policy
-   (`threshold-policy`, `spending-limit-policy`) should look like its
+   (`threshold-policy`, `weighted-threshold-policy`, `spending-limit-policy`) should look like its
    sibling wrapper, not like `session-policy`'s own-logic style, and vice
    versa. A verifier should look like the other verifiers.
 
@@ -142,10 +143,11 @@ Summarize what changed, grouped by file. If nothing was edited, say so.
 
 ## Rules
 
-These rules are derived from the existing crates — the three `policies/*`
-crates (`session-policy`, `spending-limit-policy`, `threshold-policy`),
-`account-factory`, and the three `latch-verifiers/*` crates. A few are
-marked **(target, not yet universal)** — a convention this repo has decided on going forward, that
+These rules are derived from the existing crates — the four `policies/*`
+crates (`session-policy`, `spending-limit-policy`, `threshold-policy`,
+`weighted-threshold-policy`), `account-factory`, and the three
+`latch-verifiers/*` crates. A few are marked **(target, not yet universal)**
+— a convention this repo has decided on going forward, that
 older code doesn't fully follow yet. Don't silently rewrite old code to match
 without flagging it; surface it as a discrepancy per the workflow above.
 
@@ -175,8 +177,9 @@ Ordering inside `lib.rs`:
 Two established shapes for policy crates, pick the one that matches what the
 crate is actually doing:
 
-- **Thin wrapper** (`threshold-policy`, `spending-limit-policy`) — the
-  crate has no logic of its own. Every `Policy` trait method, and any extra
+- **Thin wrapper** (`threshold-policy`, `weighted-threshold-policy`,
+  `spending-limit-policy`) — the crate has no logic of its own. Every
+  `Policy` trait method, and any extra
   query/mutation methods, is a one-line delegation into the matching
   `stellar_accounts::policies::*` free function.
 - **Own logic** (`session-policy`) — the crate implements real logic OZ

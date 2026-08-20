@@ -18,8 +18,8 @@ address the report before any public disclosure.
 
 This policy covers the smart contracts in this repository:
 `latch-smart-account`, `account-factory`, `latch-verifiers/*`, and the
-`policies/*` crates (`threshold-policy`, `session-policy`,
-`spending-limit-policy`).
+`policies/*` crates (`threshold-policy`, `weighted-threshold-policy`,
+`session-policy`, `spending-limit-policy`).
 
 Vulnerabilities in upstream dependencies (e.g. OpenZeppelin's
 [stellar-contracts](https://github.com/OpenZeppelin/stellar-contracts), or the
