@@ -1,6 +1,30 @@
-//! Thin `#[contract]` wrapper around OZ's `weighted_threshold` policy —
-//! `stellar_accounts::policies::weighted_threshold`. All logic lives
-//! upstream; this crate only supplies the deployable contract shell.
+//! Weighted M-of-N threshold policy for Latch smart accounts.
+//!
+//! Like `threshold-policy`, but signers aren't equal: each signer in a
+//! context rule is assigned an individual weight, and authorization
+//! requires the *sum* of authenticated signers' weights to reach a minimum
+//! threshold — not just a headcount. This lets some signers outweigh
+//! others, e.g. CEO=100, CTO=75, CFO=75, threshold=150 requires either the
+//! CEO plus anyone else, or both the CTO and CFO together.
+//!
+//! This is a thin `#[contract]` wrapper around OZ's `weighted_threshold`
+//! policy (`stellar_accounts::policies::weighted_threshold`) — all real
+//! logic lives upstream, this crate only supplies the deployable contract
+//! shell the factory and smart accounts can actually install and call.
+//!
+//! # How it works
+//!
+//! - `install` — called once per `(smart_account, context_rule)` pair, with a
+//!   signer→weight map and a `threshold`. Rejects `threshold == 0` or a
+//!   threshold that exceeds the sum of all configured weights.
+//! - `enforce` — called during authorization; sums the weights of the signers
+//!   who actually authenticated for this call (unweighted/unknown signers
+//!   contribute 0), and panics unless that sum is `>= threshold`.
+//! - `set_signer_weight` / `get_signer_weights` — read or change one signer's
+//!   weight after installation.
+//! - `set_threshold` / `get_threshold` — read or change the stored threshold
+//!   after installation.
+//! - `uninstall` — removes all stored weights and the threshold.
 //!
 //! # Security Warning: Signer Set Divergence
 //!

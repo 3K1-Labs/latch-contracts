@@ -1,6 +1,26 @@
-//! Thin `#[contract]` wrapper around OZ's `simple_threshold` policy —
-//! `stellar_accounts::policies::simple_threshold`. All logic lives upstream;
-//! this crate only supplies the deployable contract shell.
+//! Simple (unweighted) M-of-N threshold policy for Latch smart accounts.
+//!
+//! Attach this policy to a context rule to require that at least `threshold`
+//! of its signers authenticate before an action is authorized — a standard
+//! M-of-N multisig, with every signer counting equally (contrast with
+//! `weighted-threshold-policy`, where some signers can outweigh others).
+//!
+//! This is a thin `#[contract]` wrapper around OZ's `simple_threshold` policy
+//! (`stellar_accounts::policies::simple_threshold`) — all real logic lives
+//! upstream, this crate only supplies the deployable contract shell the
+//! factory and smart accounts can actually install and call.
+//!
+//! # How it works
+//!
+//! - `install` — called once per `(smart_account, context_rule)` pair, with a
+//!   `threshold` (the number of signers required). Rejects `threshold == 0` or
+//!   `threshold > ` the rule's current signer count.
+//! - `enforce` — called during authorization; counts how many of the rule's
+//!   signers actually authenticated for this call, and panics unless that count
+//!   is `>= threshold`.
+//! - `set_threshold` / `get_threshold` — read or change the stored threshold
+//!   after installation.
+//! - `uninstall` — removes the stored threshold entirely.
 //!
 //! # Security Warning: Signer Set Divergence
 //!
