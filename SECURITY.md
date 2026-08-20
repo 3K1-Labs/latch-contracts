@@ -17,7 +17,7 @@ address the report before any public disclosure.
 ## Scope
 
 This policy covers the smart contracts in this repository:
-`latch-smart-account`, `latch-account-factory`, `latch-threshold-policy`,
+`latch-smart-account`, `account-factory`, `latch-threshold-policy`,
 `latch-verifiers/*`, `session-policy`, and `spending-limit-policy`.
 
 Vulnerabilities in upstream dependencies (e.g. OpenZeppelin's

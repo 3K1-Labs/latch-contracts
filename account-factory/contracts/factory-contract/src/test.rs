@@ -35,7 +35,6 @@ mod dummy_singleton {
 struct FactorySetup<'a> {
     client: ContractClient<'a>,
     ed25519_verifier: Address,
-    secp256k1_verifier: Address,
     webauthn_verifier: Address,
     threshold_policy: Address,
 }
@@ -44,7 +43,6 @@ fn install_factory(env: &Env) -> FactorySetup<'_> {
     let account_hash = env.deployer().upload_contract_wasm(dummy_account::WASM);
 
     let ed25519_verifier = env.register(dummy_singleton::WASM, ());
-    let secp256k1_verifier = env.register(dummy_singleton::WASM, ());
     let webauthn_verifier = env.register(dummy_singleton::WASM, ());
     let threshold_policy = env.register(dummy_singleton::WASM, ());
 
@@ -53,7 +51,6 @@ fn install_factory(env: &Env) -> FactorySetup<'_> {
         (
             account_hash,
             ed25519_verifier.clone(),
-            secp256k1_verifier.clone(),
             webauthn_verifier.clone(),
             threshold_policy.clone(),
         ),
@@ -62,7 +59,6 @@ fn install_factory(env: &Env) -> FactorySetup<'_> {
     FactorySetup {
         client: ContractClient::new(env, &contract_id),
         ed25519_verifier,
-        secp256k1_verifier,
         webauthn_verifier,
         threshold_policy,
     }
@@ -74,10 +70,8 @@ fn install_factory_stub(env: &Env) -> ContractClient<'_> {
     let zero_hash = BytesN::from_array(env, &[0; 32]);
     let singleton = env.register(dummy_singleton::WASM, ());
 
-    let contract_id = env.register(
-        Contract,
-        (zero_hash, singleton.clone(), singleton.clone(), singleton.clone(), singleton),
-    );
+    let contract_id =
+        env.register(Contract, (zero_hash, singleton.clone(), singleton.clone(), singleton));
 
     ContractClient::new(env, &contract_id)
 }
@@ -86,15 +80,6 @@ fn ed25519_signer(env: &Env, byte: u8) -> ExternalSignerInit {
     ExternalSignerInit {
         signer_kind: SignerKind::Ed25519,
         key_data: Bytes::from_array(env, &[byte; 32]),
-    }
-}
-
-fn secp256k1_signer(env: &Env, byte: u8) -> ExternalSignerInit {
-    let mut raw = [byte; 65];
-    raw[0] = 0x04;
-    ExternalSignerInit {
-        signer_kind: SignerKind::Secp256k1,
-        key_data: Bytes::from_array(env, &raw),
     }
 }
 
@@ -110,10 +95,6 @@ fn delegated_signer(env: &Env) -> AccountSignerInit {
 
 fn ext_ed25519_signer(env: &Env, byte: u8) -> AccountSignerInit {
     AccountSignerInit::External(ed25519_signer(env, byte))
-}
-
-fn ext_secp256k1_signer(env: &Env, byte: u8) -> AccountSignerInit {
-    AccountSignerInit::External(secp256k1_signer(env, byte))
 }
 
 fn ext_webauthn_signer(env: &Env, byte: u8) -> AccountSignerInit {
@@ -150,7 +131,7 @@ fn constructor_rejects_undeployed_singletons() {
     // constructor-level failures cannot be caught with try_* client methods
     // because no client exists until registration succeeds.
     let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-        env.register(Contract, (zero_hash, fake.clone(), fake.clone(), fake.clone(), fake.clone()));
+        env.register(Contract, (zero_hash, fake.clone(), fake.clone(), fake.clone()));
     }));
 
     assert!(result.is_err());
@@ -162,7 +143,7 @@ fn signer_order_does_not_change_address() {
     let client = install_factory_stub(&env);
 
     let signer_a = ext_ed25519_signer(&env, 1);
-    let signer_b = ext_secp256k1_signer(&env, 2);
+    let signer_b = ext_webauthn_signer(&env, 2);
     let salt = BytesN::from_array(&env, &[3; 32]);
 
     let addr_1 = client.get_account_address(&AccountInitParams {
@@ -315,29 +296,6 @@ fn invalid_ed25519_key_is_rejected() {
 }
 
 #[test]
-fn invalid_secp256k1_key_is_rejected() {
-    let env = Env::default();
-    let client = install_factory_stub(&env);
-
-    let mut raw = [1u8; 65];
-    raw[0] = 0x02;
-
-    assert!(client
-        .try_get_account_address(&AccountInitParams {
-            signers: soroban_sdk::vec![
-                &env,
-                AccountSignerInit::External(ExternalSignerInit {
-                    signer_kind: SignerKind::Secp256k1,
-                    key_data: Bytes::from_array(&env, &raw),
-                })
-            ],
-            threshold: None,
-            account_salt: BytesN::from_array(&env, &[7; 32]),
-        })
-        .is_err());
-}
-
-#[test]
 fn invalid_webauthn_key_is_rejected() {
     let env = Env::default();
     let client = install_factory_stub(&env);
@@ -370,7 +328,6 @@ fn get_verifier_returns_stored_addresses() {
     let setup = install_factory(&env);
 
     assert_eq!(setup.client.get_verifier(&SignerKind::Ed25519), setup.ed25519_verifier);
-    assert_eq!(setup.client.get_verifier(&SignerKind::Secp256k1), setup.secp256k1_verifier);
     assert_eq!(setup.client.get_verifier(&SignerKind::WebAuthn), setup.webauthn_verifier);
 }
 
@@ -387,8 +344,6 @@ fn each_verifier_address_is_distinct() {
     let env = Env::default();
     let setup = install_factory(&env);
 
-    assert_ne!(setup.ed25519_verifier, setup.secp256k1_verifier);
-    assert_ne!(setup.secp256k1_verifier, setup.webauthn_verifier);
     assert_ne!(setup.ed25519_verifier, setup.webauthn_verifier);
 }
 
@@ -467,24 +422,6 @@ fn create_account_is_idempotent() {
 }
 
 #[test]
-fn create_account_with_secp256k1_signer() {
-    let env = Env::default();
-    let setup = install_factory(&env);
-
-    let params = AccountInitParams {
-        signers: soroban_sdk::vec![&env, ext_secp256k1_signer(&env, 5)],
-        threshold: None,
-        account_salt: BytesN::from_array(&env, &[30; 32]),
-    };
-
-    let expected = setup.client.get_account_address(&params);
-    let actual = setup.client.create_account(&params);
-
-    assert_eq!(expected, actual);
-    assert!(actual.executable().is_some());
-}
-
-#[test]
 fn create_account_with_webauthn_signer() {
     let env = Env::default();
     let setup = install_factory(&env);
@@ -526,12 +463,7 @@ fn create_account_mixed_signers_multisig() {
     let setup = install_factory(&env);
 
     let params = AccountInitParams {
-        signers: soroban_sdk::vec![
-            &env,
-            ext_ed25519_signer(&env, 1),
-            ext_secp256k1_signer(&env, 2),
-            ext_webauthn_signer(&env, 3)
-        ],
+        signers: soroban_sdk::vec![&env, ext_ed25519_signer(&env, 1), ext_webauthn_signer(&env, 3)],
         threshold: Some(2),
         account_salt: BytesN::from_array(&env, &[32; 32]),
     };

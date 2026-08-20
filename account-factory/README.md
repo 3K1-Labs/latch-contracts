@@ -27,12 +27,11 @@ fn __constructor(
     env: Env,
     smart_account_wasm_hash: BytesN<32>,
     ed25519_verifier: Address,
-    secp256k1_verifier: Address,
     webauthn_verifier: Address,
     threshold_policy: Address,
 )
 ```
-Stores config as immutable instance storage. All four singleton addresses must point to deployed contracts — validated at construction. Calling again panics with `AlreadyInitialized`.
+Stores config as immutable instance storage. All three singleton addresses must point to deployed contracts — validated at construction. Calling again panics with `AlreadyInitialized`.
 
 **`get_account_address`** — pure computation, no deployment:
 ```rust
@@ -62,7 +61,6 @@ External signer key shapes:
 | Kind | `key_data` | Notes |
 |---|---|---|
 | `Ed25519` | 32 bytes | Standard Stellar/Phantom key format |
-| `Secp256k1` | 65 bytes, first byte `0x04` | MetaMask, Rabby, EVM wallets |
 | `WebAuthn` | > 65 bytes, first byte `0x04` | Face ID, Touch ID, Windows Hello, YubiKey (P-256 pubkey + credential ID) |
 
 The factory does **shape validation only** — length and prefix checks. Cryptographic verification is the verifier's job.
@@ -72,18 +70,18 @@ The factory does **shape validation only** — length and prefix checks. Cryptog
 Addresses are deterministic — derived from parameters, not caller identity. Signer order does not affect the address (list is sorted before hashing).
 
 ```
-LatchAccountSaltV1 = SHA256(
-  "latch.factory.account.v1"  ||
+LatchAccountSaltV2 = SHA256(
+  "latch.factory.account.v2"  ||
   account_salt                ||   // 32 bytes
   signer_count                ||   // 4 bytes big-endian
   for each canonical signer:
-    signer_code               ||   // 1 byte: 0x00=Delegated, 0x01=Ed25519, 0x02=Secp256k1, 0x03=WebAuthn
+    signer_code               ||   // 1 byte: 0x00=Delegated, 0x01=Ed25519, 0x02=WebAuthn
     signer_data_length        ||   // 4 bytes big-endian
     signer_data               ||   // XDR address (Delegated) or key_data (External)
   effective_threshold              // 4 bytes big-endian
 )
 
-SmartAccountAddress = DeployAddress(deployer=factory, salt=LatchAccountSaltV1, wasm=smart_account_wasm_hash)
+SmartAccountAddress = DeployAddress(deployer=factory, salt=LatchAccountSaltV2, wasm=smart_account_wasm_hash)
 ```
 
 The same signer set can produce multiple independent accounts by varying `account_salt`. Generate a random 32-byte salt per account; store it if the user needs address recovery.
@@ -104,16 +102,15 @@ Single-signer accounts get no policy. Multi-signer accounts get `SimpleThreshold
 | Threshold `= 0` or `> n` | `InvalidThreshold` |
 | Single-signer with threshold `> 1` | `InvalidThreshold` |
 | Ed25519 `key_data.len() != 32` | `InvalidEd25519Key` |
-| Secp256k1 `key_data.len() != 65` or first byte `!= 0x04` | `InvalidSecp256k1Key` |
 | WebAuthn `key_data.len() <= 65` or first byte `!= 0x04` | `InvalidWebAuthnKey` |
-| Singleton address not deployed | `InvalidEd25519/Secp256k1/WebAuthn/ThresholdPolicy Verifier` |
+| Singleton address not deployed | `InvalidEd25519/WebAuthn/ThresholdPolicy Verifier` |
 | Constructor called twice | `AlreadyInitialized` |
 
 ---
 
 ## Storage & Events
 
-**Storage:** Instance only. One key: `DataKey::Config` → `FactoryConfig`. TTL extended to 30 days (`518400` ledgers) on every config read and in the constructor. No account state is stored — addresses are recomputed on demand.
+**Storage:** Instance only. One key: `DataKey::Config` → `FactoryConfig`. TTL extended to 90 days (`1,555,200` ledgers) on every config read and in the constructor. No account state is stored — addresses are recomputed on demand.
 
 **Events:** `AccountCreated { account: Address }` — emitted on first deployment only.
 
@@ -136,6 +133,9 @@ Single-signer accounts get no policy. Multi-signer accounts get `SimpleThreshold
 
 ## Development
 
+Run from the repo root — this crate is a member of the single workspace `Cargo.toml` at the top
+level, so build output always lands in the workspace root's `target/`, not a local one:
+
 ```bash
 # Build factory
 stellar contract build --package factory-contract
@@ -143,11 +143,11 @@ stellar contract build --package factory-contract
 # Build + copy test stubs (only needed after changing dummy contracts)
 stellar contract build --package dummy-account
 stellar contract build --package dummy-singleton
-cp target/wasm32v1-none/release/dummy_account.wasm contracts/factory-contract/testdata/
-cp target/wasm32v1-none/release/dummy_singleton.wasm contracts/factory-contract/testdata/
+cp target/wasm32v1-none/release/dummy_account.wasm account-factory/contracts/factory-contract/testdata/
+cp target/wasm32v1-none/release/dummy_singleton.wasm account-factory/contracts/factory-contract/testdata/
 
-# Test
-cargo test
+# Test (scoped to this crate)
+cd account-factory/contracts/factory-contract && cargo test
 ```
 
 Tests split into two layers: validation tests (use `install_factory_stub`, no real WASM needed) and deployment tests (use `install_factory` with embedded dummy WASMs). The stubs in `testdata/` are committed so CI can run `cargo test` without a WASM build step.

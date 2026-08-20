@@ -35,7 +35,6 @@ Those belong to other contracts.
 ```rust
 enum SignerKind {
     Ed25519,
-    Secp256k1,
     WebAuthn,
 }
 ```
@@ -98,7 +97,6 @@ The factory stores immutable wasm hashes for:
 
 - `smart-account`
 - `ed25519-verifier`
-- `secp256k1-verifier`
 - `webauthn-verifier`
 - `threshold-policy`
 
@@ -108,7 +106,6 @@ Example config shape:
 struct FactoryConfig {
     smart_account_wasm_hash: BytesN<32>,
     ed25519_verifier_wasm_hash: BytesN<32>,
-    secp256k1_verifier_wasm_hash: BytesN<32>,
     webauthn_verifier_wasm_hash: BytesN<32>,
     threshold_policy_wasm_hash: BytesN<32>,
 }
@@ -209,22 +206,6 @@ Factory checks:
 
 The verifier is responsible for actual signature and assertion verification.
 
-### 7.4 Secp256k1
-
-Provisional v1 format:
-
-- 65-byte uncompressed secp256k1 public key
-
-Factory checks:
-
-- `key_data.len() == 65`
-- first byte is `0x04`
-
-Note:
-
-- this format is provisional until the verifier spec is finalized
-- current recommendation is to keep this format because it aligns well with recovery-based verification
-
 ## 8. Canonicalization Rules
 
 Canonicalization is required before:
@@ -283,8 +264,13 @@ Salt preimage must include:
 Recommended version tag:
 
 ```text
-latch.factory.account.v1
+latch.factory.account.v2
 ```
+
+Bumped from `v1` at the same time `Secp256k1` was removed from `SignerKind` — the signer-kind byte
+encoding changed (§9.1.2), so the salt preimage is no longer compatible with `v1`-tagged
+deployments. Any future change to the preimage format or encoded signer-kind values should bump
+this tag again.
 
 ### 9.1.1 Deterministic Encoding Formula
 
@@ -293,7 +279,7 @@ The factory must derive a deterministic deployment salt from normalized account 
 Conceptually:
 
 ```text
-LatchAccountSaltV1 =
+LatchAccountSaltV2 =
 H(
   version_tag ||
   account_salt ||
@@ -309,7 +295,7 @@ H(
 Where:
 
 - `H` is the contract's chosen 32-byte hashing function for deployment salt derivation
-- `version_tag` is the fixed string `latch.factory.account.v1`
+- `version_tag` is the fixed string `latch.factory.account.v2`
 - `account_salt` is the explicit multiplicity input provided by the caller
 - `signer_count` is the number of canonical signers
 - `signer_i_code` is the canonical encoded signer-family code
@@ -330,8 +316,7 @@ Recommended v1 mapping:
 
 - `Delegated(Address) = 0x00`
 - `Ed25519 = 0x01`
-- `Secp256k1 = 0x02`
-- `WebAuthn = 0x03`
+- `WebAuthn = 0x02`
 
 These encoded values are part of the deterministic address-derivation surface and must not be changed within v1.
 
@@ -346,10 +331,10 @@ The smart-account deployment address is derived from:
 Conceptually:
 
 ```text
-SmartAccountAddressV1 =
+SmartAccountAddressV2 =
 DeployAddress(
   deployer = factory_address,
-  salt = LatchAccountSaltV1,
+  salt = LatchAccountSaltV2,
   wasm_hash = smart_account_wasm_hash
 )
 ```
@@ -380,7 +365,6 @@ The following must always hold:
 The factory may lazily deploy these shared contracts:
 
 - `ed25519-verifier`
-- `secp256k1-verifier`
 - `webauthn-verifier`
 - `threshold-policy`
 
@@ -391,7 +375,6 @@ These are singleton contracts scoped to the factory version.
 Recommended deterministic salts:
 
 - `latch.factory.verifier.ed25519.v1`
-- `latch.factory.verifier.secp256k1.v1`
 - `latch.factory.verifier.webauthn.v1`
 - `latch.factory.policy.threshold.v1`
 
@@ -556,7 +539,7 @@ Input:
 ```rust
 signers = [
   Delegated(<G-address-backed Address A>),
-  External({ signer_kind: Secp256k1, key_data: <65-byte pubkey B> }),
+  External({ signer_kind: Ed25519, key_data: <32-byte pubkey B> }),
   External({ signer_kind: WebAuthn, key_data: <65-byte p256 pubkey + credential id> }),
 ]
 threshold = Some(2)
@@ -590,19 +573,7 @@ Behavior:
 - reject
 - multisig requires explicit threshold
 
-## 17. Open Item
-
-Only one item remains provisional in this spec:
-
-- final `secp256k1` verifier encoding details
-
-Current recommendation:
-
-- `key_data` = 65-byte uncompressed secp256k1 public key
-- factory validates length and prefix only
-- verifier performs cryptographic recovery and equality check
-
-## 18. Product Guidance for Salts
+## 17. Product Guidance for Salts
 
 The deterministic `account_salt` should be treated as protocol input, not presentation metadata.
 

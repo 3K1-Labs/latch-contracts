@@ -38,7 +38,7 @@ sharing one `Cargo.lock` and one pinned `stellar-accounts` version:
 
 ```
 latch-smart-account/                          the account contract
-latch-account-factory/contracts/
+account-factory/contracts/
   factory-contract/                           the factory itself
   dummy-account/                               test-only stub, no tests of its own
   dummy-singleton/                             test-only stub, no tests of its own

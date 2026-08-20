@@ -32,7 +32,7 @@ for all of them to share:
 
 ```
 latch-smart-account/                # the account contract itself
-latch-account-factory/contracts/
+account-factory/contracts/
   factory-contract/                 # the factory
   dummy-account/                    # test-only stub, no tests of its own
   dummy-singleton/                  # test-only stub, no tests of its own
@@ -142,7 +142,7 @@ Summarize what changed, grouped by file. If nothing was edited, say so.
 ## Rules
 
 These rules are derived from the existing crates — `session-policy`,
-`spending-limit-policy`, `latch-threshold-policy`, `latch-account-factory`,
+`spending-limit-policy`, `latch-threshold-policy`, `account-factory`,
 and the three `latch-verifiers/*` crates. A few are marked **(target, not
 yet universal)** — a convention this repo has decided on going forward, that
 older code doesn't fully follow yet. Don't silently rewrite old code to match

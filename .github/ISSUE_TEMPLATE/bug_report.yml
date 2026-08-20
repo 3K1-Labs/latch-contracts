@@ -12,7 +12,7 @@ body:
       label: Affected crate
       options:
         - latch-smart-account
-        - latch-account-factory
+        - account-factory
         - latch-threshold-policy
         - latch-verifiers/ed25519-phantom-verifier
         - latch-verifiers/secp256k1-verifier
