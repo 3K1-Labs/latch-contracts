@@ -7,7 +7,7 @@ use soroban_sdk::{
     auth::{Context, ContractContext},
     contract, contractimpl, symbol_short,
     testutils::{Address as _, Ledger},
-    vec, Address, Bytes, Env, IntoVal, Map, String, Symbol, Val, Vec,
+    vec, Address, Bytes, BytesN, Env, Executable, IntoVal, Map, String, Symbol, Val, Vec,
 };
 use spending_limit_policy::SpendingLimitPolicy;
 use stellar_accounts::{
@@ -213,6 +213,39 @@ fn add_policy_requires_self_auth() {
     let policy_id = env.register(MockPolicyContract, ());
     let install_param: Val = Val::from_void().into();
     client.add_policy(&default_rule.id, &policy_id, &install_param);
+}
+
+#[test]
+fn upgrade_succeeds_with_self_auth() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let signers = default_signers(&env);
+    let policies = Map::new(&env);
+    let (account_id, client) = register_account(&env, &signers, &policies);
+
+    // Re-upgrading to the account's own currently-running wasm — a real,
+    // valid hash (not a dummy one), so this proves the upgrade mechanism
+    // actually succeeds end-to-end when properly self-authorized, not just
+    // that the auth check passes.
+    let Some(Executable::Wasm(wasm_hash)) = account_id.executable() else {
+        panic!("expected a wasm-backed account");
+    };
+
+    client.upgrade(&wasm_hash, &account_id);
+}
+
+#[test]
+#[should_panic]
+fn upgrade_requires_self_auth() {
+    let env = Env::default();
+
+    let signers = default_signers(&env);
+    let policies = Map::new(&env);
+    let (account_id, client) = register_account(&env, &signers, &policies);
+
+    let new_wasm_hash = BytesN::from_array(&env, &[0u8; 32]);
+    client.upgrade(&new_wasm_hash, &account_id);
 }
 
 // ################## SESSION KEY INTEGRATION TESTS ##################
