@@ -52,7 +52,7 @@ See [`latch-account-factory/README.md`](latch-account-factory/README.md) for ful
 
 ### Smart Account — `latch-smart-account/` ✅
 
-OZ-based programmable wallet contract. Implements `CustomAccountInterface`, `SmartAccount`, and `ExecutionEntryPoint`. Initialized with a set of signers and optional policies by the factory.
+OZ-based programmable wallet contract. Implements `CustomAccountInterface`, `SmartAccount`, `ExecutionEntryPoint`, and `Upgradeable`. Initialized with a set of signers and optional policies by the factory. `upgrade()` is self-authorized — gated by the account's own signers via `require_auth()`, the same as every other mutation, not an external admin. See [`UPGRADE_PATH.md`](UPGRADE_PATH.md) for the reasoning.
 
 ### Verifiers — `latch-verifiers/` ⚠️
 

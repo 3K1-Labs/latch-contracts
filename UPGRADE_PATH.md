@@ -79,12 +79,29 @@ mobile app, dApp) at its address.
 
 ---
 
-## Decision 2: The smart account should get a self-authorized `upgrade()`
+## Decision 2: The smart account gets a self-authorized `upgrade()`
 
-**Goal, not yet built.** The smart account should gain an `upgrade()` entry point, gated the same
-way every other mutation on the account already is: `e.current_contract_address().require_auth()`,
-at the account's full/default authorization tier — not reachable through a narrow session-key
-policy scope.
+**Implemented (2026-08-20).** `LatchSmartAccount` now has an `upgrade()` entry point, gated the
+same way every other mutation on the account already is:
+
+```rust
+use stellar_contract_utils::upgradeable::{self as upgradeable, Upgradeable};
+
+#[contractimpl]
+impl Upgradeable for LatchSmartAccount {
+    fn upgrade(e: &Env, new_wasm_hash: BytesN<32>, _operator: Address) {
+        e.current_contract_address().require_auth();
+        upgradeable::upgrade(e, &new_wasm_hash);
+    }
+}
+```
+
+Built on OZ's own `Upgradeable` trait (`stellar-contract-utils`, pinned `=0.7.2` — same audited
+release as `stellar-accounts`; `upgradeable` was in-scope for the `v0.7.0` audit). Verified this
+exact self-authorized shape (`require_auth()` on the account's own address, `operator` parameter
+present in the trait signature but deliberately unused) already exists as OZ's own reference
+example, `examples/multisig-smart-account/account/src/contract.rs` — this isn't a novel pattern,
+it's the documented way to use the trait.
 
 ### Why this matters beyond "nice to have"
 
@@ -109,14 +126,36 @@ deploy time.
 
 ---
 
-## Not Yet Decided (next step, after this doc is reviewed)
+## `upgrade()` — resolved
 
-- Exact `upgrade()` function signature and which Soroban host call it wraps.
-- Which context-rule / authorization tier it must sit behind, and how to guarantee a session-key
-  scoped policy can never accidentally authorize it.
-- Whether to build on OZ's `Upgradeable` trait (`stellar-contract-utils`) directly, or hand-roll
-  the equivalent — OZ's version is admin-role-gated by default and would need adapting to the
-  self-authorized model described here.
-- Storage migration strategy, if a future account version changes stored state shape.
+- **Function signature / host call**: `fn upgrade(e: &Env, new_wasm_hash: BytesN<32>, operator: Address)`,
+  wrapping `env.deployer().update_current_contract_wasm(...)` via OZ's `upgradeable::upgrade` helper.
+  Storage is preserved across the swap; the contract only changes after the invocation completes.
+- **OZ's `Upgradeable` trait vs. hand-rolled**: using OZ's directly — see Decision 2 above.
+- **Authorization tier**: `upgrade()` sits behind exactly the same `e.current_contract_address()
+  .require_auth()` gate as every other administrative method on the account (`add_signer`,
+  `remove_policy`, `add_context_rule`, ...). It does not introduce a new or weaker authorization
+  surface — whatever context rule/policy configuration would already let a caller authorize
+  `add_signer` today would equally authorize `upgrade()`. This is a pre-existing property of the
+  whole account design, not something specific to `upgrade()`: OZ's own `v0.7.0` audit calls out
+  that a `CallContract` rule grants full contract-level access to *every* `require_auth`-gated
+  entrypoint on that contract, not just one function, and states plainly that "context rules are
+  expected to be correctly configured" as a trust assumption of the library. Getting a session-key
+  policy scoped too broadly is a real risk today for `add_signer` and `remove_policy` just as much
+  as for `upgrade()` — worth being deliberate about when configuring any `CallContract` rule
+  pointed at the account's own address, not something `upgrade()` specifically needs to solve.
+
+## Still open
+
+- Storage migration strategy, if a future account version changes stored state shape. OZ's own
+  `upgradeable` module docs recommend one of: eager migration (bounded data), lazy migration
+  (unbounded data), or enum wrappers for forward-compatible layouts — not yet decided which fits
+  a future breaking `LatchSmartAccount` change, since no such change exists yet to migrate.
 - Client-side (web extension / mobile / dApp) UX for surfacing "a new account version is
   available" and walking a user through authorizing the upgrade.
+- No test yet proves an upgrade *changes behavior* (only that the mechanism succeeds end-to-end
+  against the account's own current wasm) — would need a second, distinct compiled contract
+  fixture to upgrade *to*, similar to how `factory-contract`'s tests embed pre-built `dummy-*`
+  wasm files. Not done because OZ's own `stellar-contract-utils` test suite doesn't test this
+  depth either — the mechanism itself (`update_current_contract_wasm`) is a thin, audited call
+  into a Soroban host function, not custom logic of ours to re-verify.

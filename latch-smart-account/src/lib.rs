@@ -4,12 +4,13 @@ use soroban_sdk::{
     auth::{Context, CustomAccountInterface},
     contract, contractimpl,
     crypto::Hash,
-    Address, Env, Map, String, Symbol, Val, Vec,
+    Address, BytesN, Env, Map, String, Symbol, Val, Vec,
 };
 use stellar_accounts::smart_account::{
     self as smart_account, AuthPayload, ContextRule, ContextRuleType, ExecutionEntryPoint, Signer,
     SmartAccount, SmartAccountError,
 };
+use stellar_contract_utils::upgradeable::{self as upgradeable, Upgradeable};
 
 #[contract]
 pub struct LatchSmartAccount;
@@ -53,6 +54,14 @@ impl SmartAccount for LatchSmartAccount {}
 
 #[contractimpl(contracttrait)]
 impl ExecutionEntryPoint for LatchSmartAccount {}
+
+#[contractimpl]
+impl Upgradeable for LatchSmartAccount {
+    fn upgrade(e: &Env, new_wasm_hash: BytesN<32>, _operator: Address) {
+        e.current_contract_address().require_auth();
+        upgradeable::upgrade(e, &new_wasm_hash);
+    }
+}
 
 #[cfg(test)]
 mod test;

@@ -1572,6 +1572,7 @@ dependencies = [
  "soroban-sdk",
  "spending-limit-policy",
  "stellar-accounts",
+ "stellar-contract-utils",
 ]
 
 [[package]]
@@ -1811,6 +1812,15 @@ checksum = "e3fd796d2412b3f5dc2573fd9233cf7748773d9f99faa956c16a94d1b2b5b67d"
 dependencies = [
  "serde",
  "serde-json-core",
+ "soroban-sdk",
+]
+
+[[package]]
+name = "stellar-contract-utils"
+version = "0.7.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6c45490c0ca2176bf9283445f59734ab304b17153f55fe9155de7f5cdffa4a85"
+dependencies = [
  "soroban-sdk",
 ]
 
