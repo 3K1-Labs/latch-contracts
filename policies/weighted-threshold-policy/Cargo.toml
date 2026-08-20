@@ -1,5 +1,5 @@
 [package]
-name = "smart-account"
+name = "weighted-threshold-policy"
 version = "0.0.0"
 edition = "2021"
 publish = false
@@ -11,10 +11,7 @@ doctest = false
 [dependencies]
 soroban-sdk = { workspace = true }
 stellar-accounts = { workspace = true }
-stellar-contract-utils = { workspace = true }
 
 [dev-dependencies]
 soroban-sdk = { workspace = true, features = ["testutils"] }
 stellar-accounts = { workspace = true }
-session-policy = { path = "../policies/session-policy" }
-spending-limit-policy = { path = "../policies/spending-limit-policy" }

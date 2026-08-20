@@ -42,13 +42,15 @@ account-factory/contracts/
   factory-contract/                           the factory itself
   dummy-account/                               test-only stub, no tests of its own
   dummy-singleton/                             test-only stub, no tests of its own
-latch-threshold-policy/                        wraps OZ's simple_threshold policy
 latch-verifiers/
   ed25519-phantom-verifier/
   secp256k1-verifier/                          stub, not yet implemented
   webauthn-verifier/
-session-policy/                                method-allowlist policy
-spending-limit-policy/                         wraps OZ's spending_limit policy
+policies/
+  threshold-policy/                            wraps OZ's simple_threshold policy
+  weighted-threshold-policy/                   wraps OZ's weighted_threshold policy
+  session-policy/                              method-allowlist policy
+  spending-limit-policy/                       wraps OZ's spending_limit policy
 ```
 
 `cargo +nightly fmt --all -- --check` runs against the whole workspace

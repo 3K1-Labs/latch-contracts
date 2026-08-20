@@ -5,12 +5,13 @@ members = [
   "account-factory/contracts/factory-contract",
   "account-factory/contracts/dummy-account",
   "account-factory/contracts/dummy-singleton",
-  "latch-threshold-policy",
   "latch-verifiers/ed25519-phantom-verifier",
   "latch-verifiers/secp256k1-verifier",
   "latch-verifiers/webauthn-verifier",
-  "session-policy",
-  "spending-limit-policy",
+  "policies/threshold-policy",
+  "policies/weighted-threshold-policy",
+  "policies/session-policy",
+  "policies/spending-limit-policy",
 ]
 
 [workspace.dependencies]

@@ -36,13 +36,15 @@ account-factory/contracts/
   factory-contract/                 # the factory
   dummy-account/                    # test-only stub, no tests of its own
   dummy-singleton/                  # test-only stub, no tests of its own
-latch-threshold-policy/             # thin wrapper around OZ's simple_threshold
 latch-verifiers/
   ed25519-phantom-verifier/
   secp256k1-verifier/               # stub, not yet implemented
   webauthn-verifier/
-session-policy/                     # method-allowlist policy (own logic)
-spending-limit-policy/              # thin wrapper around OZ's spending_limit
+policies/
+  threshold-policy/                 # thin wrapper around OZ's simple_threshold
+  weighted-threshold-policy/        # thin wrapper around OZ's weighted_threshold
+  session-policy/                   # method-allowlist policy (own logic)
+  spending-limit-policy/            # thin wrapper around OZ's spending_limit
 ```
 
 One shared `Cargo.lock`, one `stellar-accounts` version for everything —
@@ -58,7 +60,7 @@ regardless of cwd. See the memory entry on auditing the OZ pin
   (`git diff main...HEAD --name-only`, plus any uncommitted edits).
 - `/code-quality <path>` — review a specific file or directory.
 - `/code-quality <crate-name>` — review one crate by its top-level directory
-  name (e.g. `session-policy`, `latch-verifiers/webauthn-verifier`).
+  name (e.g. `policies/session-policy`, `latch-verifiers/webauthn-verifier`).
 
 ## Workflow
 
@@ -88,7 +90,7 @@ Walk the file set against **two** reference points:
 
 1. **The rules in the `Rules` section below.**
 2. **The closest existing sibling crate.** A "thin wrapper" policy
-   (`latch-threshold-policy`, `spending-limit-policy`) should look like its
+   (`threshold-policy`, `weighted-threshold-policy`, `spending-limit-policy`) should look like its
    sibling wrapper, not like `session-policy`'s own-logic style, and vice
    versa. A verifier should look like the other verifiers.
 
@@ -141,10 +143,11 @@ Summarize what changed, grouped by file. If nothing was edited, say so.
 
 ## Rules
 
-These rules are derived from the existing crates — `session-policy`,
-`spending-limit-policy`, `latch-threshold-policy`, `account-factory`,
-and the three `latch-verifiers/*` crates. A few are marked **(target, not
-yet universal)** — a convention this repo has decided on going forward, that
+These rules are derived from the existing crates — the four `policies/*`
+crates (`session-policy`, `spending-limit-policy`, `threshold-policy`,
+`weighted-threshold-policy`), `account-factory`, and the three
+`latch-verifiers/*` crates. A few are marked **(target, not yet universal)**
+— a convention this repo has decided on going forward, that
 older code doesn't fully follow yet. Don't silently rewrite old code to match
 without flagging it; surface it as a discrepancy per the workflow above.
 
@@ -155,7 +158,7 @@ Each crate is a single `src/lib.rs` plus `src/test.rs`, not OZ's
 contracts, not multi-extension library packages, so one file is the right
 size. If a crate's logic genuinely splits into more than one concern, pull
 the second concern into its own named submodule (the only current example:
-`session-policy/src/allowlist.rs`, declared via `mod allowlist;` in `lib.rs`
+`policies/session-policy/src/allowlist.rs`, declared via `mod allowlist;` in `lib.rs`
 and re-exported with `pub use allowlist::*;`).
 
 Ordering inside `lib.rs`:
@@ -174,8 +177,9 @@ Ordering inside `lib.rs`:
 Two established shapes for policy crates, pick the one that matches what the
 crate is actually doing:
 
-- **Thin wrapper** (`latch-threshold-policy`, `spending-limit-policy`) — the
-  crate has no logic of its own. Every `Policy` trait method, and any extra
+- **Thin wrapper** (`threshold-policy`, `weighted-threshold-policy`,
+  `spending-limit-policy`) — the crate has no logic of its own. Every
+  `Policy` trait method, and any extra
   query/mutation methods, is a one-line delegation into the matching
   `stellar_accounts::policies::*` free function.
 - **Own logic** (`session-policy`) — the crate implements real logic OZ
@@ -192,7 +196,7 @@ crate is actually doing:
   independently deployed contract, not a module of a shared library, so
   numbering starts fresh at `1` per crate — there is no shared range to
   respect (contrast with OZ, where e.g. `fungible` owns the 100s and
-  `access-control` the 2000s). `session-policy/src/allowlist.rs`'s
+  `access-control` the 2000s). `policies/session-policy/src/allowlist.rs`'s
   `SessionError` doc comment states this explicitly; new crates should say
   the same.
 - **Events**: `#[contractevent]` struct, PascalCase, past-tense or noun
@@ -255,7 +259,7 @@ crate is actually doing:
   "Crate"` / `group_imports = "StdExternalCrate"`.
 - No wildcard imports (`use foo::*;`) outside test files pulling in a
   sibling module's items (e.g. `use crate::allowlist::*;` in
-  `session-policy/src/test.rs`).
+  `policies/session-policy/src/test.rs`).
 
 ### Documentation
 
