@@ -16,5 +16,5 @@ stellar-contract-utils = { workspace = true }
 [dev-dependencies]
 soroban-sdk = { workspace = true, features = ["testutils"] }
 stellar-accounts = { workspace = true }
-session-policy = { path = "../session-policy" }
-spending-limit-policy = { path = "../spending-limit-policy" }
+session-policy = { path = "../policies/session-policy" }
+spending-limit-policy = { path = "../policies/spending-limit-policy" }

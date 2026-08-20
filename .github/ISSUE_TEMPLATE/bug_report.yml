@@ -13,12 +13,12 @@ body:
       options:
         - latch-smart-account
         - account-factory
-        - latch-threshold-policy
         - latch-verifiers/ed25519-phantom-verifier
         - latch-verifiers/secp256k1-verifier
         - latch-verifiers/webauthn-verifier
-        - session-policy
-        - spending-limit-policy
+        - policies/threshold-policy
+        - policies/session-policy
+        - policies/spending-limit-policy
         - Other / not sure
     validations:
       required: true

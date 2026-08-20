@@ -113,7 +113,7 @@ batch_canonicalize_key
 
 | Field | Value |
 |---|---|
-| WASM file | `latch-threshold-policy/target/wasm32v1-none/release/threshold_policy.wasm` |
+| WASM file | `policies/threshold-policy/target/wasm32v1-none/release/threshold_policy.wasm` |
 | WASM hash | `5c3d8acccfd37b03b75aaa183c5ea4d5b615c907dfc84c5db148f899484c3d47` |
 | WASM size | 8,672 bytes (optimized from 9,526) |
 | Built with | `stellar contract build --optimize` |
