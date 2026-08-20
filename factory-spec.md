@@ -264,8 +264,13 @@ Salt preimage must include:
 Recommended version tag:
 
 ```text
-latch.factory.account.v1
+latch.factory.account.v2
 ```
+
+Bumped from `v1` at the same time `Secp256k1` was removed from `SignerKind` — the signer-kind byte
+encoding changed (§9.1.2), so the salt preimage is no longer compatible with `v1`-tagged
+deployments. Any future change to the preimage format or encoded signer-kind values should bump
+this tag again.
 
 ### 9.1.1 Deterministic Encoding Formula
 
@@ -290,7 +295,7 @@ H(
 Where:
 
 - `H` is the contract's chosen 32-byte hashing function for deployment salt derivation
-- `version_tag` is the fixed string `latch.factory.account.v1`
+- `version_tag` is the fixed string `latch.factory.account.v2`
 - `account_salt` is the explicit multiplicity input provided by the caller
 - `signer_count` is the number of canonical signers
 - `signer_i_code` is the canonical encoded signer-family code

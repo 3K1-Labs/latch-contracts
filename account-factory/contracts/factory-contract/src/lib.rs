@@ -100,7 +100,7 @@ impl Contract {
             threshold_policy,
         };
         env.storage().instance().set(&DataKey::Config, &config);
-        env.storage().instance().extend_ttl(100, 518400);
+        env.storage().instance().extend_ttl(100, 1_555_200);
     }
 
     pub fn get_account_address(env: Env, params: AccountInitParams) -> Address {
@@ -151,7 +151,7 @@ struct NormalizedParams {
 }
 
 fn get_config(env: &Env) -> FactoryConfig {
-    env.storage().instance().extend_ttl(100, 518400);
+    env.storage().instance().extend_ttl(100, 1_555_200);
     env.storage()
         .instance()
         .get(&DataKey::Config)
@@ -298,7 +298,7 @@ fn build_account_policies(
 }
 
 fn compute_account_deploy_salt(env: &Env, params: &NormalizedParams) -> BytesN<32> {
-    let mut preimage = Bytes::from_slice(env, b"latch.factory.account.v1");
+    let mut preimage = Bytes::from_slice(env, b"latch.factory.account.v2");
     preimage.extend_from_array(&params.account_salt.to_array());
     preimage.extend_from_array(&params.signers.len().to_be_bytes());
 

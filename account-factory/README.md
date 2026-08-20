@@ -71,7 +71,7 @@ Addresses are deterministic — derived from parameters, not caller identity. Si
 
 ```
 LatchAccountSaltV1 = SHA256(
-  "latch.factory.account.v1"  ||
+  "latch.factory.account.v2"  ||
   account_salt                ||   // 32 bytes
   signer_count                ||   // 4 bytes big-endian
   for each canonical signer:
@@ -110,7 +110,7 @@ Single-signer accounts get no policy. Multi-signer accounts get `SimpleThreshold
 
 ## Storage & Events
 
-**Storage:** Instance only. One key: `DataKey::Config` → `FactoryConfig`. TTL extended to 30 days (`518400` ledgers) on every config read and in the constructor. No account state is stored — addresses are recomputed on demand.
+**Storage:** Instance only. One key: `DataKey::Config` → `FactoryConfig`. TTL extended to 90 days (`1,555,200` ledgers) on every config read and in the constructor. No account state is stored — addresses are recomputed on demand.
 
 **Events:** `AccountCreated { account: Address }` — emitted on first deployment only.
 

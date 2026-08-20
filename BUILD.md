@@ -141,6 +141,15 @@ set_threshold
 > `SignerKind`/`FactoryConfig`/constructor (5 args → 4 args, secp256k1 verifier dropped). The wasm
 > hash and constructor args below no longer match current source. Redeploy before relying on this
 > record.
+>
+> **Salt version note.** This deployment's account-derivation salt used the version tag
+> `latch.factory.account.v1`. Current source uses `latch.factory.account.v2` (bumped alongside the
+> secp256k1 removal, since the signer-kind byte encoding changed too — see `factory-spec.md` §9.1).
+> Any factory deployed from current source — including the eventual mainnet deployment — derives
+> account addresses under `v2`, which are **not** compatible with `v1`-derived addresses even for
+> an identical signer set. If the salt preimage format or signer-kind encoding changes again before
+> mainnet, bump the tag to `v3` and update this note. Also bumped: instance-storage TTL refresh from
+> 30 days (`518400` ledgers) to 90 days (`1,555,200` ledgers).
 
 | Field | Value |
 |---|---|
