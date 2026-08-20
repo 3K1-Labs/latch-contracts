@@ -279,7 +279,7 @@ The factory must derive a deterministic deployment salt from normalized account 
 Conceptually:
 
 ```text
-LatchAccountSaltV1 =
+LatchAccountSaltV2 =
 H(
   version_tag ||
   account_salt ||
@@ -331,10 +331,10 @@ The smart-account deployment address is derived from:
 Conceptually:
 
 ```text
-SmartAccountAddressV1 =
+SmartAccountAddressV2 =
 DeployAddress(
   deployer = factory_address,
-  salt = LatchAccountSaltV1,
+  salt = LatchAccountSaltV2,
   wasm_hash = smart_account_wasm_hash
 )
 ```

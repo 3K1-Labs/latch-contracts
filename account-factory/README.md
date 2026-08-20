@@ -70,7 +70,7 @@ The factory does **shape validation only** — length and prefix checks. Cryptog
 Addresses are deterministic — derived from parameters, not caller identity. Signer order does not affect the address (list is sorted before hashing).
 
 ```
-LatchAccountSaltV1 = SHA256(
+LatchAccountSaltV2 = SHA256(
   "latch.factory.account.v2"  ||
   account_salt                ||   // 32 bytes
   signer_count                ||   // 4 bytes big-endian
@@ -81,7 +81,7 @@ LatchAccountSaltV1 = SHA256(
   effective_threshold              // 4 bytes big-endian
 )
 
-SmartAccountAddress = DeployAddress(deployer=factory, salt=LatchAccountSaltV1, wasm=smart_account_wasm_hash)
+SmartAccountAddress = DeployAddress(deployer=factory, salt=LatchAccountSaltV2, wasm=smart_account_wasm_hash)
 ```
 
 The same signer set can produce multiple independent accounts by varying `account_salt`. Generate a random 32-byte salt per account; store it if the user needs address recovery.
@@ -133,6 +133,9 @@ Single-signer accounts get no policy. Multi-signer accounts get `SimpleThreshold
 
 ## Development
 
+Run from the repo root — this crate is a member of the single workspace `Cargo.toml` at the top
+level, so build output always lands in the workspace root's `target/`, not a local one:
+
 ```bash
 # Build factory
 stellar contract build --package factory-contract
@@ -140,11 +143,11 @@ stellar contract build --package factory-contract
 # Build + copy test stubs (only needed after changing dummy contracts)
 stellar contract build --package dummy-account
 stellar contract build --package dummy-singleton
-cp target/wasm32v1-none/release/dummy_account.wasm contracts/factory-contract/testdata/
-cp target/wasm32v1-none/release/dummy_singleton.wasm contracts/factory-contract/testdata/
+cp target/wasm32v1-none/release/dummy_account.wasm account-factory/contracts/factory-contract/testdata/
+cp target/wasm32v1-none/release/dummy_singleton.wasm account-factory/contracts/factory-contract/testdata/
 
-# Test
-cargo test
+# Test (scoped to this crate)
+cd account-factory/contracts/factory-contract && cargo test
 ```
 
 Tests split into two layers: validation tests (use `install_factory_stub`, no real WASM needed) and deployment tests (use `install_factory` with embedded dummy WASMs). The stubs in `testdata/` are committed so CI can run `cargo test` without a WASM build step.
