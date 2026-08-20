@@ -17,7 +17,7 @@ This repository is a **single Cargo workspace** — every contract is a member c
 
 ```
 latch-contracts/
-├── latch-account-factory/
+├── account-factory/
 │   └── contracts/
 │       ├── factory-contract/    # ✅ Complete — the factory itself
 │       ├── dummy-account/       # Test-only stub used by factory-contract's tests
@@ -37,7 +37,7 @@ latch-contracts/
 
 ## Contracts
 
-### Factory — `latch-account-factory/` ✅
+### Factory — `account-factory/` ✅
 
 The canonical entrypoint for creating Latch smart accounts. Validates and canonicalizes signer inputs, derives deterministic account addresses, and deploys new smart account instances.
 
@@ -48,7 +48,7 @@ The canonical entrypoint for creating Latch smart accounts. Validates and canoni
 - The same signer set can own multiple accounts via an explicit `account_salt`
 - Verifier and policy contracts are pre-deployed and passed in at factory construction — the factory only ever deploys smart account instances
 
-See [`latch-account-factory/README.md`](latch-account-factory/README.md) for full documentation.
+See [`account-factory/README.md`](account-factory/README.md) for full documentation.
 
 ### Smart Account — `latch-smart-account/` ✅
 

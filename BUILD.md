@@ -139,7 +139,7 @@ set_threshold
 
 | Field | Value |
 |---|---|
-| WASM file | `latch-account-factory/target/wasm32v1-none/release/factory_contract.wasm` |
+| WASM file | `account-factory/target/wasm32v1-none/release/factory_contract.wasm` |
 | WASM hash | `56cc40058ff623fedf62b94dfa29380d3cd218860da8439d4c00de0017a68856` |
 | WASM size | 8,148 bytes (optimized from 9,500) |
 | Built with | `stellar contract build --optimize` |
