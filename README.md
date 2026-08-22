@@ -33,8 +33,7 @@ latch-contracts/
 │   ├── session-policy/              # ✅ Method-allowlist (session key) policy
 │   └── spending-limit-policy/       # ✅ Spending-limit policy
 ├── factory-spec.md              # Behavioral spec for the factory
-├── UPGRADE_PATH.md              # Account & factory upgrade path decision
-└── PLAN.md                      # v1 architecture plan
+└── UPGRADE_PATH.md              # Account & factory upgrade path decision
 ```
 
 ## Contracts
@@ -126,7 +125,6 @@ stellar contract build                                       # WASM build
 
 - [`factory-spec.md`](factory-spec.md) — Detailed behavioral specification for the factory contract (validation rules, address derivation formula, canonicalization, worked examples)
 - [`UPGRADE_PATH.md`](UPGRADE_PATH.md) — How the factory and smart account handle upgrades and versioning
-- [`PLAN.md`](PLAN.md) — v1 architecture plan covering all contracts in scope
 
 ## Contributing
 
