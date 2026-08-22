@@ -23,15 +23,16 @@ latch-contracts/
 │       ├── dummy-account/       # Test-only stub used by factory-contract's tests
 │       └── dummy-singleton/     # Test-only stub used by factory-contract's tests
 ├── latch-smart-account/         # ✅ Smart account contract
-├── latch-verifiers/                  # Verifier contracts
-│   ├── ed25519-verifier/             # ✅ Plain Ed25519 — raw hash, no wrapping
-│   ├── modified-ed25519-verifier/    # ✅ Ed25519 for Phantom's popup constraint
+├── latch-verifiers/              # Verifier contracts
+│   ├── ed25519-verifier/         # ✅ Ed25519 — raw hash, no wrapping
 │   └── webauthn-verifier/
 ├── policies/                    # Policy contracts
 │   ├── threshold-policy/            # ✅ Simple (unweighted) threshold policy
 │   ├── weighted-threshold-policy/   # ✅ Weighted threshold policy
 │   ├── session-policy/              # ✅ Method-allowlist (session key) policy
 │   └── spending-limit-policy/       # ✅ Spending-limit policy
+├── demo/                        # Demo/reference code — not shipped, not deployed for real use
+│   └── modified-ed25519-verifier/   # Wallet-signing-popup wrapping pattern, kept for reference
 ├── factory-spec.md              # Behavioral spec for the factory
 ├── UPGRADE_PATH.md              # Account & factory upgrade path decision
 └── PLAN.md                      # v1 architecture plan
@@ -58,15 +59,12 @@ OZ-based programmable wallet contract. Implements `CustomAccountInterface`, `Sma
 
 ### Verifiers — `latch-verifiers/` ✅
 
-Stateless singleton contracts that verify signatures on behalf of smart accounts. Signers aren't limited to one verifier per kind — `ed25519-verifier` and `modified-ed25519-verifier` both verify Ed25519 signatures, just over a different signed message, depending on what the client can actually produce.
+Stateless singleton contracts that verify signatures on behalf of smart accounts. One contract per signer kind, shared across all accounts on the network.
 
 | Contract | Signer type | Key format | Status |
 |---|---|---|---|
-| `ed25519-verifier` | Any signer that can sign the raw 32-byte hash directly (native keys, SDK-integrated wallets) | 32-byte Ed25519 public key | ✅ Implemented |
-| `modified-ed25519-verifier` | Phantom wallet, and anything else that can only produce signatures through a similarly restrictive external signing popup | 32-byte Ed25519 public key | ✅ Implemented |
+| `ed25519-verifier` | Any Ed25519 signer — native keys, SDK-integrated wallets | 32-byte Ed25519 public key | ✅ Implemented |
 | `webauthn-verifier` | Passkeys, Face ID, Touch ID, YubiKey | 65-byte P-256 key + credential ID | ✅ Implemented |
-
-`modified-ed25519-verifier` exists solely to work around Phantom's browser-extension `signMessage` popup, which refuses to sign bare 32-byte payloads as an anti-blind-signing heuristic (they're indistinguishable from Solana transaction hashes) — not a cryptographic or protocol requirement. It verifies signatures over `"Stellar Smart Account Auth:\n" + hex(hash)` instead of the raw hash. See its module doc and spec for the full reasoning.
 
 ### Threshold Policy — `policies/threshold-policy/` ✅
 
@@ -84,13 +82,17 @@ Restricts a context rule's signers to an allow-listed set of contract function n
 
 Thin wrapper around OZ's `stellar-accounts` spending-limit policy. Enforces a rolling spend cap per context rule.
 
+### Demo — `demo/` ⚠️
+
+Not part of the shipped contract lineup — not deployed for real use, not wired into anything. `modified-ed25519-verifier` was built to prove a one-off demo (a Phantom-held key deploying and owning a Latch smart account on-chain), not a real product feature: Latch and Phantom are separate browser extensions, and nothing gives Latch's own extension an ongoing way to drive Phantom's signing popup afterward. Kept as a worked reference for the general "wallet popup won't sign a raw hash" wrapping pattern — see its module doc.
+
 ## Deployment Order
 
 Before a factory can be deployed, all singleton contracts must already exist on the network. The required order is:
 
 ```
 1. stellar contract install   # upload smart account wasm, capture hash
-2. stellar contract deploy    modified-ed25519-verifier   # factory's ed25519_verifier today; see Verifiers below
+2. stellar contract deploy    ed25519-verifier
 3. stellar contract deploy    webauthn-verifier
 4. stellar contract deploy    threshold-policy
 5. stellar contract deploy    factory  (pass smart_account_wasm_hash + 3 addresses)

@@ -14,7 +14,6 @@ body:
         - latch-smart-account
         - account-factory
         - latch-verifiers/ed25519-verifier
-        - latch-verifiers/modified-ed25519-verifier
         - latch-verifiers/webauthn-verifier
         - policies/threshold-policy
         - policies/weighted-threshold-policy

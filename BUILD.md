@@ -35,21 +35,26 @@ update_context_rule_valid_until
 
 ---
 
-## Modified Ed25519 Verifier
+## Modified Ed25519 Verifier (demo, not production)
 
-> **Rename note.** This was deployed as `ed25519-phantom-verifier` (crate struct
-> `Ed25519PhantomVerifier`). The crate is now `modified-ed25519-verifier`
-> (struct `ModifiedEd25519Verifier`) — same logic, same behavior, no source
-> change beyond the rename and an expanded module doc. This deployment
-> remains valid; the wasm hash below reflects the pre-rename build, and a
-> fresh build from current source will hash differently (rebuild is a normal
-> toolchain/compiler artifact, not a logic change). A plain, unprefixed
-> `ed25519-verifier` now also exists alongside this one — see the Verifiers
-> section in the root README for when to use which.
+> **Demo artifact — moved to `demo/`, not part of the shipped verifier lineup.**
+> This was originally deployed as `ed25519-phantom-verifier`, then renamed to
+> `modified-ed25519-verifier` and briefly kept under `latch-verifiers/`. It has
+> since been moved to `demo/modified-ed25519-verifier/`: it was built to prove
+> a one-off demo (a Phantom-held key deploying and owning a Latch smart
+> account on-chain), not a real product feature — Latch and Phantom are
+> separate browser extensions, and nothing gives Latch's own extension an
+> ongoing way to drive Phantom's signing popup after that initial demo
+> transaction. Kept in the repo as a worked reference for the general
+> "wallet popup won't sign a raw hash" wrapping pattern, in case a future
+> integration (e.g. a MetaMask-popup-constrained secp256k1 variant) needs it
+> — not deployed for, or intended for, real use. This deployment record is
+> kept for historical/audit purposes only; the wasm hash below predates both
+> the rename and the move.
 
 | Field | Value |
 |---|---|
-| WASM file | `latch-verifiers/modified-ed25519-verifier/target/wasm32v1-none/release/modified_ed25519_verifier.wasm` |
+| WASM file | `demo/modified-ed25519-verifier/target/wasm32v1-none/release/modified_ed25519_verifier.wasm` |
 | WASM hash | `9246cfdd8c34e4453bd787195b61e286401727539675676ef28cfeae0320c561` |
 | WASM size | 2,593 bytes (optimized from 2,984) |
 | Built with | `stellar contract build --optimize` |

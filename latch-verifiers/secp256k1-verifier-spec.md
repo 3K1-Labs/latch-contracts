@@ -1,12 +1,11 @@
 # Secp256k1 Verifier Spec
 
-> **Status: Not started, but no longer blocked.** The Ed25519 verifiers (`ed25519-verifier`,
-> `modified-ed25519-verifier`) and `webauthn-verifier` are all shipped — the sequencing that
-> deferred this one no longer applies. This spec now includes concrete recommendations, not just
-> open questions, for whoever picks it up. The stub crate that previously existed
-> (`secp256k1-verifier`) has been deleted from the repo — start fresh from this spec, matching the
-> structure of `ed25519-verifier` (see that crate's source for the pattern: a thin `#[contract]`
-> wrapper, `Verifier` trait impl, `src/test.rs` with adversarial negative tests).
+> **Status: Not started, but no longer blocked.** `ed25519-verifier` and `webauthn-verifier` are
+> both shipped — the sequencing that deferred this one no longer applies. This spec now includes
+> concrete recommendations, not just open questions, for whoever picks it up. The stub crate that
+> previously existed (`secp256k1-verifier`) has been deleted from the repo — start fresh from this
+> spec, matching the structure of `ed25519-verifier` (see that crate's source for the pattern: a
+> thin `#[contract]` wrapper, `Verifier` trait impl, `src/test.rs` with adversarial negative tests).
 
 ## What this verifier is for
 
@@ -42,11 +41,11 @@ wrapper — that's not a cryptographic property of the curve.
 Don't build in an EIP-191 (`"\x19Ethereum Signed Message:\n" + len + message`) wrapper by default.
 That convention only matters if a client is specifically going through a wallet's `personal_sign`
 popup — which is a client-integration detail, not something this verifier should assume or bake
-in. (`modified-ed25519-verifier` exists for exactly that reason on the Ed25519 side, because
-Phantom's popup refuses to sign bare 32-byte payloads — see its module doc — but that's a
-Phantom-specific UX constraint discovered empirically, not something to pre-emptively copy here.)
-If a real MetaMask-popup integration is attempted later and hits the same kind of constraint, that
-would justify a separate `modified-secp256k1-verifier` variant at that point — don't design this
+in. `demo/modified-ed25519-verifier` is a worked reference for what that kind of wrapping looks
+like *if* it's ever needed — it exists because a one-off demo needed to work around Phantom's
+signing popup refusing to sign bare 32-byte payloads, not because every wallet-popup integration
+needs this by default. If a real MetaMask-popup integration is attempted later and hits the same
+kind of constraint, that would justify a separate variant built the same way — don't design this
 one around a problem that hasn't been confirmed to exist yet.
 
 ### 2. Verify vs recover — resolved: recovery is the only path
@@ -72,8 +71,8 @@ Two options:
   re-deriving and comparing the address instead.
 
 **Recommendation: keep the 65-byte uncompressed pubkey.** Every other verifier in this repo
-(`ed25519-verifier`, `modified-ed25519-verifier`, `webauthn-verifier`) stores and canonicalizes the
-actual public key material, not a derived hash/address — switching this one verifier to an
+(`ed25519-verifier`, `webauthn-verifier`) stores and canonicalizes the actual public key material,
+not a derived hash/address — switching this one verifier to an
 address-based model breaks that symmetry for no real benefit, and throws away key material a future
 scheme (aggregate signatures, cross-verifier dedup) might want. Deriving a familiar `0x...` address
 for display purposes belongs in the client/SDK layer, not the on-chain `key_data` representation.

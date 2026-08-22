@@ -1,31 +1,35 @@
-//! Ed25519 verifier for a modified, prefixed signing convention — **not**
-//! the verifier for a plain Ed25519 signer. See `ed25519-verifier` for that.
+//! Demo/reference crate — **not part of the shipped verifier lineup.**
 //!
-//! # Why this exists
+//! This was built to prove, in a one-off demo, that a Phantom-held Ed25519
+//! key could deploy and become the owning signer of a Latch smart account
+//! on-chain. It isn't wired into any product surface: Latch and Phantom are
+//! separate browser extensions, and nothing gives Latch's extension an
+//! ongoing way to drive Phantom's signing popup after that initial demo
+//! transaction — that would require real extension-to-extension
+//! integration that was never built. The strategy going forward is Latch
+//! as the wallet (its own extension + mobile app), with other wallets
+//! integrating *via SDK*, not by Latch reaching into their signing UI.
 //!
-//! This crate exists solely because of a Phantom wallet UX constraint, not
-//! any cryptographic or protocol requirement. Phantom's browser-extension
-//! `signMessage` popup is a generic, untrusted-dApp-facing API — it can't
-//! tell "Latch requesting a legitimate 32-byte auth hash" from "a malicious
-//! site trying to get you to blind-sign an opaque payload that's actually a
-//! transaction." As a defensive heuristic, Phantom refuses to sign raw
-//! 32-byte payloads at all (they're indistinguishable from Solana
-//! transaction hashes).
+//! Kept here, out of `latch-verifiers/`, purely as a worked reference: the
+//! wrapping pattern below (hex-encode the hash, prepend a human-readable
+//! prefix, verify against the wrapped message) is the general shape needed
+//! any time a *specific* wallet's signing popup refuses to sign a raw
+//! 32-byte payload — the same problem `secp256k1-verifier-spec.md` flags
+//! as a possible future need if a real MetaMask-popup integration is ever
+//! attempted. Do not deploy this contract or treat it as a real verifier.
 //!
-//! To work around that, the client wraps the hash in a human-readable
-//! message before asking Phantom to sign it: `AUTH_PREFIX +
-//! lowercase_hex(auth_payload_hash)`. This contract reconstructs that exact
-//! 92-byte message and verifies the signature against it — real
-//! cryptographic verification, just over a wrapped payload instead of the
-//! raw hash.
+//! # Why the underlying constraint exists (kept for reference)
 //!
-//! This is an artifact of going through Phantom's *external* signing
-//! popup — the interface any third-party dApp uses. A wallet with native
-//! Latch/SDK integration (its own trusted code constructing and signing the
-//! request internally, not routed through the public "sign this opaque
-//! thing" popup) would have no untrusted third party to defend against, and
-//! could sign the raw hash directly like any other SDK-integrated signer —
-//! i.e. it would use `ed25519-verifier`, not this one.
+//! Phantom's browser-extension `signMessage` popup is a generic,
+//! untrusted-dApp-facing API — it can't tell "a legitimate 32-byte auth
+//! hash" from "a malicious site trying to get you to blind-sign an opaque
+//! payload that's actually a transaction." As a defensive heuristic,
+//! Phantom refuses to sign raw 32-byte payloads at all (they're
+//! indistinguishable from Solana transaction hashes). The workaround: wrap
+//! the hash in a human-readable message before asking Phantom to sign it —
+//! `AUTH_PREFIX + lowercase_hex(auth_payload_hash)` — and this contract
+//! reconstructs that exact 92-byte message and verifies the signature
+//! against it.
 #![no_std]
 
 use soroban_sdk::{

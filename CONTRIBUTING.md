@@ -43,14 +43,15 @@ account-factory/contracts/
   dummy-account/                               test-only stub, no tests of its own
   dummy-singleton/                             test-only stub, no tests of its own
 latch-verifiers/
-  ed25519-verifier/                            plain Ed25519, raw hash
-  modified-ed25519-verifier/                   Ed25519 for Phantom's popup constraint
+  ed25519-verifier/                            Ed25519, raw hash
   webauthn-verifier/
 policies/
   threshold-policy/                            wraps OZ's simple_threshold policy
   weighted-threshold-policy/                   wraps OZ's weighted_threshold policy
   session-policy/                              method-allowlist policy
   spending-limit-policy/                       wraps OZ's spending_limit policy
+demo/                                          reference code only — not shipped
+  modified-ed25519-verifier/                   wallet-popup wrapping pattern, kept for reference
 ```
 
 `cargo +nightly fmt --all -- --check` runs against the whole workspace
