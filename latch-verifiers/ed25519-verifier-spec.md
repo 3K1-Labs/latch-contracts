@@ -1,12 +1,10 @@
 # Ed25519 Verifier Spec
 
-A stateless singleton Soroban contract that verifies plain Ed25519 signatures over the raw 32-byte Soroban auth payload hash, on behalf of Latch smart accounts. Deployed once, shared across all accounts on the network.
+A stateless singleton Soroban contract that verifies Ed25519 signatures over the raw 32-byte Soroban auth payload hash, on behalf of Latch smart accounts. Deployed once, shared across all accounts on the network.
 
 ## Why This Verifier Exists
 
-Stellar uses Ed25519 as its native signature curve and the Soroban host exposes `e.crypto().ed25519_verify()` as a builtin. A verifier that calls that builtin directly over the raw 32-byte auth payload hash is sufficient for any signer that can sign arbitrary bytes without going through a defensive third-party signing interface.
-
-This is the "obvious" Ed25519 verifier — no message wrapping, no client-specific signing convention. Contrast with `modified-ed25519-verifier`, which exists solely to work around Phantom wallet's `signMessage` popup refusing to sign bare 32-byte payloads (an anti-phishing heuristic in Phantom's own UI, not a cryptographic requirement). Use this verifier whenever the signer can sign the hash directly — a native key, a hardware signer, or a wallet with real SDK-level Latch integration rather than routing through a generic external signing popup.
+Stellar uses Ed25519 as its native signature curve and the Soroban host exposes `e.crypto().ed25519_verify()` as a builtin. This verifier calls that builtin directly over the raw 32-byte auth payload hash — the client signs the hash as-is, no wrapping or additional encoding.
 
 ## Trait Compliance
 
@@ -71,6 +69,5 @@ The verifier holds no storage. No constructor is needed. Every call is a pure fu
 
 ## What This Is Not
 
-- Not a fix for wallet-popup restrictions like Phantom's — that's `modified-ed25519-verifier`'s job. Using this verifier with a client that can't sign raw hashes will simply produce signatures that fail to verify.
 - Not responsible for replay protection. The Soroban auth framework handles that at the host level.
 - Not a replacement for `Signer::Delegated`. Users migrating from G-addresses can use the delegated path — no verifier needed.
