@@ -1,5 +1,5 @@
 [package]
-name = "ed25519-phantom-verifier"
+name = "ed25519-verifier"
 version = "0.0.0"
 edition = "2021"
 publish = false

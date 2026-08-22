@@ -669,7 +669,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "ed25519-phantom-verifier"
+name = "ed25519-verifier"
 version = "0.0.0"
 dependencies = [
  "ed25519-dalek",
@@ -1126,6 +1126,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cf8baf1c55e62ffcace7a9f06f4bd9cd3f0c4beb022d3b367256b91b87513d98"
 
 [[package]]
+name = "modified-ed25519-verifier"
+version = "0.0.0"
+dependencies = [
+ "ed25519-dalek",
+ "soroban-sdk",
+ "stellar-accounts",
+]
+
+[[package]]
 name = "num-bigint"
 version = "0.4.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1404,14 +1413,6 @@ dependencies = [
  "generic-array",
  "subtle",
  "zeroize",
-]
-
-[[package]]
-name = "secp256k1-verifier"
-version = "0.0.0"
-dependencies = [
- "soroban-sdk",
- "stellar-accounts",
 ]
 
 [[package]]

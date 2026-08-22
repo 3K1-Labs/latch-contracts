@@ -23,15 +23,16 @@ latch-contracts/
 │       ├── dummy-account/       # Test-only stub used by factory-contract's tests
 │       └── dummy-singleton/     # Test-only stub used by factory-contract's tests
 ├── latch-smart-account/         # ✅ Smart account contract
-├── latch-verifiers/             # ⚠️ Verifier contracts
-│   ├── ed25519-phantom-verifier/
-│   ├── secp256k1-verifier/      # Stub — not wired into the factory, unused in v1
+├── latch-verifiers/              # Verifier contracts
+│   ├── ed25519-verifier/         # ✅ Ed25519 — raw hash, no wrapping
 │   └── webauthn-verifier/
 ├── policies/                    # Policy contracts
 │   ├── threshold-policy/            # ✅ Simple (unweighted) threshold policy
 │   ├── weighted-threshold-policy/   # ✅ Weighted threshold policy
 │   ├── session-policy/              # ✅ Method-allowlist (session key) policy
 │   └── spending-limit-policy/       # ✅ Spending-limit policy
+├── demo/                        # Demo/reference code — not shipped, not deployed for real use
+│   └── modified-ed25519-verifier/   # Wallet-signing-popup wrapping pattern, kept for reference
 ├── factory-spec.md              # Behavioral spec for the factory
 └── UPGRADE_PATH.md              # Account & factory upgrade path decision
 ```
@@ -55,15 +56,14 @@ See [`account-factory/README.md`](account-factory/README.md) for full documentat
 
 OZ-based programmable wallet contract. Implements `CustomAccountInterface`, `SmartAccount`, `ExecutionEntryPoint`, and `Upgradeable`. Initialized with a set of signers and optional policies by the factory. `upgrade()` is self-authorized — gated by the account's own signers via `require_auth()`, the same as every other mutation, not an external admin. See [`UPGRADE_PATH.md`](UPGRADE_PATH.md) for the reasoning.
 
-### Verifiers — `latch-verifiers/` ⚠️
+### Verifiers — `latch-verifiers/` ✅
 
 Stateless singleton contracts that verify signatures on behalf of smart accounts. One contract per signer kind, shared across all accounts on the network.
 
 | Contract | Signer type | Key format | Status |
 |---|---|---|---|
-| `ed25519-phantom-verifier` | Phantom, Stellar wallets | 32-byte Ed25519 public key | ✅ Implemented |
+| `ed25519-verifier` | Any Ed25519 signer — native keys, SDK-integrated wallets | 32-byte Ed25519 public key | ✅ Implemented |
 | `webauthn-verifier` | Passkeys, Face ID, Touch ID, YubiKey | 65-byte P-256 key + credential ID | ✅ Implemented |
-| `secp256k1-verifier` | MetaMask, EVM wallets | 65-byte uncompressed secp256k1 key | 🔜 Stub, not wired into the factory |
 
 ### Threshold Policy — `policies/threshold-policy/` ✅
 
@@ -80,6 +80,10 @@ Restricts a context rule's signers to an allow-listed set of contract function n
 ### Spending Limit Policy — `policies/spending-limit-policy/` ✅
 
 Thin wrapper around OZ's `stellar-accounts` spending-limit policy. Enforces a rolling spend cap per context rule.
+
+### Demo — `demo/` ⚠️
+
+Not part of the shipped contract lineup — not deployed for real use, not wired into anything. `modified-ed25519-verifier` was built to prove a one-off demo (a Phantom-held key deploying and owning a Latch smart account on-chain), not a real product feature: Latch and Phantom are separate browser extensions, and nothing gives Latch's own extension an ongoing way to drive Phantom's signing popup afterward. Kept as a worked reference for the general "wallet popup won't sign a raw hash" wrapping pattern — see its module doc.
 
 ## Deployment Order
 

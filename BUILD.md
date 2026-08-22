@@ -35,11 +35,26 @@ update_context_rule_valid_until
 
 ---
 
-## Ed25519 Phantom Verifier
+## Modified Ed25519 Verifier (demo, not production)
+
+> **Demo artifact — moved to `demo/`, not part of the shipped verifier lineup.**
+> This was originally deployed as `ed25519-phantom-verifier`, then renamed to
+> `modified-ed25519-verifier` and briefly kept under `latch-verifiers/`. It has
+> since been moved to `demo/modified-ed25519-verifier/`: it was built to prove
+> a one-off demo (a Phantom-held key deploying and owning a Latch smart
+> account on-chain), not a real product feature — Latch and Phantom are
+> separate browser extensions, and nothing gives Latch's own extension an
+> ongoing way to drive Phantom's signing popup after that initial demo
+> transaction. Kept in the repo as a worked reference for the general
+> "wallet popup won't sign a raw hash" wrapping pattern, in case a future
+> integration (e.g. a MetaMask-popup-constrained secp256k1 variant) needs it
+> — not deployed for, or intended for, real use. This deployment record is
+> kept for historical/audit purposes only; the wasm hash below predates both
+> the rename and the move.
 
 | Field | Value |
 |---|---|
-| WASM file | `latch-verifiers/ed25519-phantom-verifier/target/wasm32v1-none/release/ed25519_phantom_verifier.wasm` |
+| WASM file | `demo/modified-ed25519-verifier/target/wasm32v1-none/release/modified_ed25519_verifier.wasm` |
 | WASM hash | `9246cfdd8c34e4453bd787195b61e286401727539675676ef28cfeae0320c561` |
 | WASM size | 2,593 bytes (optimized from 2,984) |
 | Built with | `stellar contract build --optimize` |
@@ -56,6 +71,14 @@ verify
 canonicalize_key
 batch_canonicalize_key
 ```
+
+---
+
+## Ed25519 Verifier
+
+New crate, not yet built or deployed to any network. Plain Ed25519 verifier —
+verifies over the raw 32-byte hash directly, no message wrapping. See
+`ed25519-verifier-spec.md` for the interface.
 
 ---
 
@@ -83,9 +106,16 @@ batch_canonicalize_key
 
 ---
 
-## Secp256k1 Verifier (stub)
+## Secp256k1 Verifier (stub, crate removed)
 
-> **Placeholder only, and no longer wired into the factory.** `verify` panics with `NotImplemented`. `Secp256k1` was removed from the factory's `SignerKind` — this deployment is unused by any current factory instance.
+> **The `secp256k1-verifier` crate has been deleted from the repository** as
+> part of the verifier cleanup pass. This deployment is an orphaned artifact
+> from before the deletion — it still exists on testnet and this record is
+> kept for historical/audit purposes, but there is no corresponding source in
+> the repo anymore. `verify` panics with `NotImplemented`; `Secp256k1` was
+> already removed from the factory's `SignerKind` before the crate itself was
+> deleted. See the refactored `secp256k1-verifier-spec.md` for implementation
+> guidance if this gets rebuilt from scratch.
 
 | Field | Value |
 |---|---|

@@ -37,14 +37,15 @@ account-factory/contracts/
   dummy-account/                    # test-only stub, no tests of its own
   dummy-singleton/                  # test-only stub, no tests of its own
 latch-verifiers/
-  ed25519-phantom-verifier/
-  secp256k1-verifier/               # stub, not yet implemented
+  ed25519-verifier/                 # Ed25519, raw hash
   webauthn-verifier/
 policies/
   threshold-policy/                 # thin wrapper around OZ's simple_threshold
   weighted-threshold-policy/        # thin wrapper around OZ's weighted_threshold
   session-policy/                   # method-allowlist policy (own logic)
   spending-limit-policy/            # thin wrapper around OZ's spending_limit
+demo/                               # reference code only — not shipped, not deployed
+  modified-ed25519-verifier/        # wallet-popup wrapping pattern, kept for reference
 ```
 
 One shared `Cargo.lock`, one `stellar-accounts` version for everything —
@@ -145,7 +146,7 @@ Summarize what changed, grouped by file. If nothing was edited, say so.
 
 These rules are derived from the existing crates — the four `policies/*`
 crates (`session-policy`, `spending-limit-policy`, `threshold-policy`,
-`weighted-threshold-policy`), `account-factory`, and the three
+`weighted-threshold-policy`), `account-factory`, and the two
 `latch-verifiers/*` crates. A few are marked **(target, not yet universal)**
 — a convention this repo has decided on going forward, that
 older code doesn't fully follow yet. Don't silently rewrite old code to match
@@ -215,14 +216,19 @@ crate is actually doing:
   not borrowed — this is the top-level contract entrypoint, not a library
   free function).
 - **Verifier associated types**: keep `KeyData`/`SigData` to minimal wire
-  types (`Bytes`, `BytesN<32>`, `BytesN<64>`). Document the wire format and
-  any protocol quirk (e.g. why Phantom needs a text prefix, what bytes a
-  WebAuthn `sig_data` XDR blob contains) directly on `verify`'s doc comment —
-  this is a real strength of the existing verifiers, keep doing it.
-- **Stub contracts**: an intentionally-unimplemented contract (e.g.
-  `secp256k1-verifier`) gets a `// STUB — ...` block comment at the top of
-  the file explaining what's missing and why it's still deployed, plus its
-  own `NotImplemented` error variant — not a bare `panic!` or `todo!()`.
+  types (`Bytes`, `BytesN<32>`, `BytesN<64>`). Document the wire format
+  directly on `verify`'s doc comment (e.g. what bytes a WebAuthn `sig_data`
+  XDR blob contains) — this is a real strength of the existing verifiers,
+  keep doing it. Don't document a client-specific signing quirk on a
+  verifier that doesn't have one, just to compare it against a sibling —
+  see `demo/modified-ed25519-verifier`'s doc for what that quirk looks like
+  when a verifier genuinely has one.
+- **Stub contracts**: an intentionally-unimplemented contract (the repo has
+  none right now — `secp256k1-verifier` was this shape before its crate was
+  deleted; see `secp256k1-verifier-spec.md` if it's rebuilt) gets a
+  `// STUB — ...` block comment at the top of the file explaining what's
+  missing and why it's still deployed, plus its own `NotImplemented` error
+  variant — not a bare `panic!` or `todo!()`.
 
 ### Errors and panics
 
@@ -230,9 +236,6 @@ crate is actually doing:
   `panic!`, `unreachable!`, and `unwrap()` are violations outside test code
   (`clippy.toml` sets `allow-unwrap-in-tests = true`). `expect("...")` is
   fine when the message explains *why* the value is guaranteed present.
-  `ed25519-phantom-verifier`'s `assert!(hash.len() == PAYLOAD_LEN, ...)` is
-  an existing discrepancy against this rule — flag it, don't silently copy
-  it into new code.
 - Document errors in a `# Errors` section on public functions that can
   panic, one bullet per variant, `` [`ModuleError::Variant`] - <reason> ``.
 
@@ -245,9 +248,9 @@ crate is actually doing:
   `rev`). Member crates reference them as `{ workspace = true }` in both
   `[dependencies]` and `[dev-dependencies]` — never an inline version string.
   A crate-specific extra dependency used by only one or two crates (e.g.
-  `ed25519-dalek` in `ed25519-phantom-verifier`, `p256` in
-  `webauthn-verifier`) stays a direct dependency in that crate's own
-  `Cargo.toml`, not promoted to the workspace level.
+  `ed25519-dalek` in `ed25519-verifier`, `p256` in `webauthn-verifier`) stays
+  a direct dependency in that crate's own `Cargo.toml`, not promoted to the
+  workspace level.
 - `[profile.release]` / `[profile.release-with-logs]` live once in the root
   `Cargo.toml` — Cargo only honors profile tables in the workspace root: a
   `[profile.*]` table in a member crate's `Cargo.toml` is silently ignored.
