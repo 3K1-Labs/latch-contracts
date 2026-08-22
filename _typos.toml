@@ -1,0 +1,3 @@
+[default.extend-words]
+# Groth16 — a real zk-SNARK proof system (Jens Groth), not a misspelling of "Growth16".
+groth = "groth"
