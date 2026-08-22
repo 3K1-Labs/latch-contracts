@@ -1,5 +1,5 @@
 [package]
-name = "secp256k1-verifier"
+name = "modified-ed25519-verifier"
 version = "0.0.0"
 edition = "2021"
 publish = false
@@ -14,3 +14,5 @@ stellar-accounts = { workspace = true }
 
 [dev-dependencies]
 soroban-sdk = { workspace = true, features = ["testutils"] }
+stellar-accounts = { workspace = true }
+ed25519-dalek = { version = "2.1.1", default-features = false, features = ["rand_core"] }

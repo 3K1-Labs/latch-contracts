@@ -13,8 +13,7 @@ body:
       options:
         - latch-smart-account
         - account-factory
-        - latch-verifiers/ed25519-phantom-verifier
-        - latch-verifiers/secp256k1-verifier
+        - latch-verifiers/ed25519-verifier
         - latch-verifiers/webauthn-verifier
         - policies/threshold-policy
         - policies/weighted-threshold-policy
