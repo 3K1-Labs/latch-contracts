@@ -43,8 +43,8 @@ account-factory/contracts/
   dummy-account/                               test-only stub, no tests of its own
   dummy-singleton/                             test-only stub, no tests of its own
 latch-verifiers/
-  ed25519-phantom-verifier/
-  secp256k1-verifier/                          stub, not yet implemented
+  ed25519-verifier/                            plain Ed25519, raw hash
+  modified-ed25519-verifier/                   Ed25519 for Phantom's popup constraint
   webauthn-verifier/
 policies/
   threshold-policy/                            wraps OZ's simple_threshold policy

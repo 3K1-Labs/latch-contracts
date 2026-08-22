@@ -5,9 +5,8 @@ extern crate std;
 use ed25519_dalek::{Signer as DalekSigner, SigningKey};
 use soroban_sdk::{Bytes, BytesN, Env, Vec};
 
-use super::{
-    Ed25519PhantomVerifier, Ed25519PhantomVerifierClient, AUTH_PREFIX, PREFIX_LEN, SIGNED_MSG_LEN,
-};
+use super::{Ed25519Verifier, Ed25519VerifierClient};
+
 // ── helpers ──────────────────────────────────────────────────────────────────
 
 /// Generates a deterministic keypair from a fixed seed for testing.
@@ -36,33 +35,15 @@ fn test_payload(e: &Env) -> Bytes {
     Bytes::from_array(e, &TEST_PAYLOAD)
 }
 
-/// Builds the 92-byte message the client signs: PREFIX + hex(hash).
-fn build_signed_message(hash: &[u8; 32]) -> [u8; SIGNED_MSG_LEN] {
-    const HEX: &[u8; 16] = b"0123456789abcdef";
-    let mut msg = [0u8; SIGNED_MSG_LEN];
-    msg[..PREFIX_LEN].copy_from_slice(AUTH_PREFIX);
-    for (i, &b) in hash.iter().enumerate() {
-        msg[PREFIX_LEN + i * 2] = HEX[(b >> 4) as usize];
-        msg[PREFIX_LEN + i * 2 + 1] = HEX[(b & 0x0f) as usize];
-    }
-    msg
-}
-
-/// Signs the Latch-prefixed message with the given keypair.
-fn phantom_sign(keypair: &SigningKey, hash_bytes: &[u8; 32]) -> [u8; 64] {
-    let msg = build_signed_message(hash_bytes);
-    keypair.sign(&msg).to_bytes()
-}
-
-fn register_verifier(e: &Env) -> Ed25519PhantomVerifierClient<'_> {
-    let addr = e.register(Ed25519PhantomVerifier, ());
-    Ed25519PhantomVerifierClient::new(e, &addr)
+fn register_verifier(e: &Env) -> Ed25519VerifierClient<'_> {
+    let addr = e.register(Ed25519Verifier, ());
+    Ed25519VerifierClient::new(e, &addr)
 }
 
 // ── verify tests ─────────────────────────────────────────────────────────────
 
 #[test]
-fn verify_valid_phantom_signature() {
+fn verify_valid_signature() {
     let e = Env::default();
     let client = register_verifier(&e);
 
@@ -70,55 +51,10 @@ fn verify_valid_phantom_signature() {
     let pub_key = BytesN::<32>::from_array(&e, keypair.verifying_key().as_bytes());
 
     let hash = test_payload(&e);
-    let sig_bytes = phantom_sign(&keypair, &TEST_PAYLOAD);
-    let sig = BytesN::<64>::from_array(&e, &sig_bytes);
-
-    assert!(client.verify(&hash, &pub_key, &sig));
-}
-
-#[test]
-#[should_panic(expected = "Error(Crypto, InvalidInput)")]
-fn verify_rejects_raw_hash_signature() {
-    // Signing the raw 32-byte hash (no prefix) must fail.
-    // This is the exact constraint Phantom imposes — confirms the verifier
-    // enforces the prefix convention.
-    let e = Env::default();
-    let client = register_verifier(&e);
-
-    let keypair = test_keypair();
-    let pub_key = BytesN::<32>::from_array(&e, keypair.verifying_key().as_bytes());
-
-    let hash = test_payload(&e);
-
-    // Sign the raw hash directly — no prefix
     let sig_bytes = keypair.sign(&TEST_PAYLOAD).to_bytes();
     let sig = BytesN::<64>::from_array(&e, &sig_bytes);
 
-    client.verify(&hash, &pub_key, &sig);
-}
-
-#[test]
-#[should_panic(expected = "Error(Crypto, InvalidInput)")]
-fn verify_rejects_wrong_prefix() {
-    let e = Env::default();
-    let client = register_verifier(&e);
-
-    let keypair = test_keypair();
-    let pub_key = BytesN::<32>::from_array(&e, keypair.verifying_key().as_bytes());
-
-    let hash = test_payload(&e);
-
-    // Sign with a different prefix
-    let wrong_prefix = b"Wrong Prefix:\n";
-    let mut msg = std::vec::Vec::new();
-    msg.extend_from_slice(wrong_prefix);
-    let hex: std::string::String = TEST_PAYLOAD.iter().map(|b| std::format!("{:02x}", b)).collect();
-    msg.extend_from_slice(hex.as_bytes());
-
-    let sig_bytes = keypair.sign(&msg).to_bytes();
-    let sig = BytesN::<64>::from_array(&e, &sig_bytes);
-
-    client.verify(&hash, &pub_key, &sig);
+    assert!(client.verify(&hash, &pub_key, &sig));
 }
 
 #[test]
@@ -131,7 +67,7 @@ fn verify_rejects_corrupted_signature() {
     let pub_key = BytesN::<32>::from_array(&e, keypair.verifying_key().as_bytes());
 
     let hash = test_payload(&e);
-    let mut sig_bytes = phantom_sign(&keypair, &TEST_PAYLOAD);
+    let mut sig_bytes = keypair.sign(&TEST_PAYLOAD).to_bytes();
     sig_bytes[0] = sig_bytes[0].wrapping_add(1); // corrupt
     let sig = BytesN::<64>::from_array(&e, &sig_bytes);
 
@@ -151,7 +87,7 @@ fn verify_rejects_wrong_key() {
     let wrong_pub_key = BytesN::<32>::from_array(&e, keypair2.verifying_key().as_bytes());
 
     let hash = test_payload(&e);
-    let sig_bytes = phantom_sign(&keypair, &TEST_PAYLOAD);
+    let sig_bytes = keypair.sign(&TEST_PAYLOAD).to_bytes();
     let sig = BytesN::<64>::from_array(&e, &sig_bytes);
 
     client.verify(&hash, &wrong_pub_key, &sig);
@@ -167,18 +103,16 @@ fn verify_rejects_wrong_payload() {
     let pub_key = BytesN::<32>::from_array(&e, keypair.verifying_key().as_bytes());
 
     // Sign one hash, verify against a different hash
-    let _hash_a = test_payload(&e);
     let hash_b = Bytes::from_array(&e, &[0xffu8; 32]);
 
-    let sig_bytes = phantom_sign(&keypair, &TEST_PAYLOAD);
+    let sig_bytes = keypair.sign(&TEST_PAYLOAD).to_bytes();
     let sig = BytesN::<64>::from_array(&e, &sig_bytes);
 
-    // Pass hash_b but signature was over hash_a
+    // Pass hash_b but signature was over TEST_PAYLOAD
     client.verify(&hash_b, &pub_key, &sig);
 }
 
-// ── canonicalize_key tests
-// ────────────────────────────────────────────────────
+// ── canonicalize_key tests ──────────────────────────────────────────────────
 
 #[test]
 fn canonicalize_key_is_identity() {
@@ -205,8 +139,7 @@ fn canonicalize_key_distinct_keys_produce_distinct_output() {
     assert_ne!(client.canonicalize_key(&key_a), client.canonicalize_key(&key_b));
 }
 
-// ── batch_canonicalize_key tests
-// ──────────────────────────────────────────────
+// ── batch_canonicalize_key tests ────────────────────────────────────────────
 
 #[test]
 fn batch_canonicalize_key_preserves_order() {

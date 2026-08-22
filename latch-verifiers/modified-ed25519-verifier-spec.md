@@ -1,4 +1,4 @@
-# Ed25519 Phantom Verifier Spec
+# Modified Ed25519 Verifier Spec
 
 A stateless singleton Soroban contract that verifies Ed25519 signatures produced by Phantom wallet on behalf of Latch smart accounts. Deployed once, shared across all accounts on the network.
 
@@ -33,7 +33,7 @@ This constraint is Phantom-specific. It does not apply to:
 - `Signer::Delegated` — the Soroban host validates native Stellar keypair signatures directly, no verifier call occurs
 - WebAuthn — the challenge is base64url-encoded inside `clientDataJSON`, not sent as raw bytes
 
-A separate pure Ed25519 verifier (no prefix, raw hash) could be built for signers without this restriction using the `stellar_accounts::verifiers::ed25519` library. It is not needed now because Phantom is the only Ed25519 client in scope.
+A separate pure Ed25519 verifier (no prefix, raw hash) exists for signers without this restriction — see `ed25519-verifier`, a thin wrapper around the `stellar_accounts::verifiers::ed25519` library. Use that one for any signer that can sign arbitrary bytes directly; use this one only when the client is going through a signing interface with Phantom's specific constraint.
 
 ---
 
@@ -151,12 +151,10 @@ The verifier holds no storage. No constructor is needed. Every call is a pure fu
 ```
 latch-contracts/
 └── latch-verifiers/
-    └── ed25519-phantom-verifier/
-        └── contracts/
-            └── ed25519-phantom-verifier/
-                └── src/
-                    ├── lib.rs
-                    └── test.rs
+    └── modified-ed25519-verifier/
+        └── src/
+            ├── lib.rs
+            └── test.rs
 ```
 
 The `verify` implementation does not delegate to `stellar_accounts::verifiers::ed25519::verify` directly — that function verifies over the raw payload. The contract implements the prefix logic itself and calls `e.crypto().ed25519_verify` directly. `canonicalize_key` and `batch_canonicalize_key` do delegate to the OZ library functions.
@@ -173,10 +171,10 @@ const HEX_LEN: usize = 64;
 const TOTAL_LEN: usize = PREFIX_LEN + HEX_LEN; // 92
 
 #[contract]
-pub struct Ed25519PhantomVerifier;
+pub struct ModifiedEd25519Verifier;
 
 #[contractimpl]
-impl Verifier for Ed25519PhantomVerifier {
+impl Verifier for ModifiedEd25519Verifier {
     type KeyData = BytesN<32>;
     type SigData = BytesN<64>;
 

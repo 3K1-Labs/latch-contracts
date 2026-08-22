@@ -35,11 +35,21 @@ update_context_rule_valid_until
 
 ---
 
-## Ed25519 Phantom Verifier
+## Modified Ed25519 Verifier
+
+> **Rename note.** This was deployed as `ed25519-phantom-verifier` (crate struct
+> `Ed25519PhantomVerifier`). The crate is now `modified-ed25519-verifier`
+> (struct `ModifiedEd25519Verifier`) — same logic, same behavior, no source
+> change beyond the rename and an expanded module doc. This deployment
+> remains valid; the wasm hash below reflects the pre-rename build, and a
+> fresh build from current source will hash differently (rebuild is a normal
+> toolchain/compiler artifact, not a logic change). A plain, unprefixed
+> `ed25519-verifier` now also exists alongside this one — see the Verifiers
+> section in the root README for when to use which.
 
 | Field | Value |
 |---|---|
-| WASM file | `latch-verifiers/ed25519-phantom-verifier/target/wasm32v1-none/release/ed25519_phantom_verifier.wasm` |
+| WASM file | `latch-verifiers/modified-ed25519-verifier/target/wasm32v1-none/release/modified_ed25519_verifier.wasm` |
 | WASM hash | `9246cfdd8c34e4453bd787195b61e286401727539675676ef28cfeae0320c561` |
 | WASM size | 2,593 bytes (optimized from 2,984) |
 | Built with | `stellar contract build --optimize` |
@@ -56,6 +66,14 @@ verify
 canonicalize_key
 batch_canonicalize_key
 ```
+
+---
+
+## Ed25519 Verifier
+
+New crate, not yet built or deployed to any network. Plain Ed25519 verifier —
+verifies over the raw 32-byte hash directly, no message wrapping. See
+`ed25519-verifier-spec.md` for the interface.
 
 ---
 
@@ -83,9 +101,16 @@ batch_canonicalize_key
 
 ---
 
-## Secp256k1 Verifier (stub)
+## Secp256k1 Verifier (stub, crate removed)
 
-> **Placeholder only, and no longer wired into the factory.** `verify` panics with `NotImplemented`. `Secp256k1` was removed from the factory's `SignerKind` — this deployment is unused by any current factory instance.
+> **The `secp256k1-verifier` crate has been deleted from the repository** as
+> part of the verifier cleanup pass. This deployment is an orphaned artifact
+> from before the deletion — it still exists on testnet and this record is
+> kept for historical/audit purposes, but there is no corresponding source in
+> the repo anymore. `verify` panics with `NotImplemented`; `Secp256k1` was
+> already removed from the factory's `SignerKind` before the crate itself was
+> deleted. See the refactored `secp256k1-verifier-spec.md` for implementation
+> guidance if this gets rebuilt from scratch.
 
 | Field | Value |
 |---|---|

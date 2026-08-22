@@ -37,8 +37,8 @@ account-factory/contracts/
   dummy-account/                    # test-only stub, no tests of its own
   dummy-singleton/                  # test-only stub, no tests of its own
 latch-verifiers/
-  ed25519-phantom-verifier/
-  secp256k1-verifier/               # stub, not yet implemented
+  ed25519-verifier/                 # plain Ed25519, raw hash
+  modified-ed25519-verifier/        # Ed25519 for Phantom's popup constraint
   webauthn-verifier/
 policies/
   threshold-policy/                 # thin wrapper around OZ's simple_threshold
@@ -219,10 +219,12 @@ crate is actually doing:
   any protocol quirk (e.g. why Phantom needs a text prefix, what bytes a
   WebAuthn `sig_data` XDR blob contains) directly on `verify`'s doc comment —
   this is a real strength of the existing verifiers, keep doing it.
-- **Stub contracts**: an intentionally-unimplemented contract (e.g.
-  `secp256k1-verifier`) gets a `// STUB — ...` block comment at the top of
-  the file explaining what's missing and why it's still deployed, plus its
-  own `NotImplemented` error variant — not a bare `panic!` or `todo!()`.
+- **Stub contracts**: an intentionally-unimplemented contract (the repo has
+  none right now — `secp256k1-verifier` was this shape before its crate was
+  deleted; see `secp256k1-verifier-spec.md` if it's rebuilt) gets a
+  `// STUB — ...` block comment at the top of the file explaining what's
+  missing and why it's still deployed, plus its own `NotImplemented` error
+  variant — not a bare `panic!` or `todo!()`.
 
 ### Errors and panics
 
@@ -230,7 +232,7 @@ crate is actually doing:
   `panic!`, `unreachable!`, and `unwrap()` are violations outside test code
   (`clippy.toml` sets `allow-unwrap-in-tests = true`). `expect("...")` is
   fine when the message explains *why* the value is guaranteed present.
-  `ed25519-phantom-verifier`'s `assert!(hash.len() == PAYLOAD_LEN, ...)` is
+  `modified-ed25519-verifier`'s `assert!(hash.len() == PAYLOAD_LEN, ...)` is
   an existing discrepancy against this rule — flag it, don't silently copy
   it into new code.
 - Document errors in a `# Errors` section on public functions that can
@@ -245,8 +247,8 @@ crate is actually doing:
   `rev`). Member crates reference them as `{ workspace = true }` in both
   `[dependencies]` and `[dev-dependencies]` — never an inline version string.
   A crate-specific extra dependency used by only one or two crates (e.g.
-  `ed25519-dalek` in `ed25519-phantom-verifier`, `p256` in
-  `webauthn-verifier`) stays a direct dependency in that crate's own
+  `ed25519-dalek` in `ed25519-verifier`/`modified-ed25519-verifier`, `p256`
+  in `webauthn-verifier`) stays a direct dependency in that crate's own
   `Cargo.toml`, not promoted to the workspace level.
 - `[profile.release]` / `[profile.release-with-logs]` live once in the root
   `Cargo.toml` — Cargo only honors profile tables in the workspace root: a
