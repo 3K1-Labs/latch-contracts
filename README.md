@@ -136,5 +136,6 @@ stellar contract build                                       # WASM build
 
 Contributions are welcome — see [`CONTRIBUTING.md`](CONTRIBUTING.md) for the workflow (start with
 an issue, not a PR) and the code conventions checklist. Security issues should go to
-[`SECURITY.md`](SECURITY.md)'s contact instead of a public issue. Licensed under
+[`SECURITY.md`](SECURITY.md)'s contact instead of a public issue. Everyone participating is
+expected to follow the [`CODE_OF_CONDUCT.md`](CODE_OF_CONDUCT.md). Licensed under
 [MIT](LICENSE).
