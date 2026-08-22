@@ -34,8 +34,7 @@ latch-contracts/
 ├── demo/                        # Demo/reference code — not shipped, not deployed for real use
 │   └── modified-ed25519-verifier/   # Wallet-signing-popup wrapping pattern, kept for reference
 ├── factory-spec.md              # Behavioral spec for the factory
-├── UPGRADE_PATH.md              # Account & factory upgrade path decision
-└── PLAN.md                      # v1 architecture plan
+└── UPGRADE_PATH.md              # Account & factory upgrade path decision
 ```
 
 ## Contracts
