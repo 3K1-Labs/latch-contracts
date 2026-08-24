@@ -9,8 +9,8 @@
 //! `transfer(from, to, amount)` shape (same assumption as spending-limit).
 use soroban_sdk::{
     auth::{Context, ContractContext},
-    contracterror, contractevent, contracttype, panic_with_error, symbol_short, Address, Env, Val,
-    Vec,
+    contracterror, contractevent, contracttype, panic_with_error, symbol_short, Address, Env,
+    TryFromVal, Val, Vec,
 };
 use stellar_accounts::smart_account::{ContextRule, ContextRuleType, Signer};
 
