@@ -130,6 +130,7 @@ stellar contract build                                       # WASM build
 - [`factory-spec.md`](factory-spec.md) — Detailed behavioral specification for the factory contract (validation rules, address derivation formula, canonicalization, worked examples)
 - [`UPGRADE_PATH.md`](UPGRADE_PATH.md) — How the factory and smart account handle upgrades and versioning
 - [`MAINNET_READINESS_CHECKLIST.md`](MAINNET_READINESS_CHECKLIST.md) — What's still open before real funds sit behind these contracts
+- [`ISSUE_TRIAGE_GUIDE.md`](ISSUE_TRIAGE_GUIDE.md) — How we got every open issue here ready for outside contributors; apply the same process in the other Latch repos
 - [`PLAN.md`](PLAN.md) — v1 architecture plan covering all contracts in scope
 
 ## Contributing
