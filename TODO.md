@@ -12,10 +12,10 @@ Tracking known gaps and follow-ups.
       Now that the pin is a real crates.io version (`=0.7.2`) instead of a
       git rev, this is simpler than before — just compare against the
       latest published version and its own audit status.
-- [ ] **`ed25519-phantom-verifier`'s `assert!()`** (in `verify()`) should be
-      `panic_with_error!` with a proper error variant instead — flagged as a
-      discrepancy in `.claude/commands/code-quality.md`'s "Errors and
-      panics" rule, not yet fixed.
+- [x] **`ed25519-phantom-verifier`'s `assert!()`** (in `verify()`) —
+      fixed 2026-08-22 as part of the verifier cleanup pass, alongside the
+      crate's rename to `modified-ed25519-verifier`. Now
+      `panic_with_error!(ModifiedEd25519VerifierError::InvalidHashLength)`.
 
 ## Code conventions (flagged, not yet applied)
 
@@ -48,6 +48,32 @@ Tracking known gaps and follow-ups.
       functions across multiple contracts."` We've only ever built one crate
       at a time (`--package <name>`); unclear whether building all 10 in one
       CI context would hit that same collision. Not urgent — revisit later.
+
+## OSS readiness / contribution surface
+
+Broader goal: get the repo clean, clear, and ready for outside contributors and an audit, with
+well-scoped issues for the gaps rather than silent TODOs. Flesh these out into real issues later —
+not yet drafted or filed.
+
+- [x] **Re-scope issue #2 ("Implement secp256k1 verifier").** Updated 2026-08-22: the
+      `secp256k1-verifier` stub crate has been deleted entirely (verifier cleanup pass), and
+      `secp256k1-verifier-spec.md` was refactored with concrete implementation guidance for
+      whoever picks this up. Issue body updated to match — not closed, since the underlying
+      need still stands.
+- [ ] **Draft contribution issues for the remaining verifier kinds** from OZ's EIP-7913-inspired
+      `(verifier_address, public_key)` model (`Verifier` trait: `verify(e, hash, key_data,
+      sig_data) -> bool`). None of these have issues yet:
+      - Secp256r1 (raw ECDSA, e.g. secure-enclave signing) — **not** redundant with
+        `webauthn-verifier`, which parses full WebAuthn assertion format (authenticator data +
+        client-data JSON), not raw P-256 signatures.
+      - BLS
+      - RSA (institutional keys)
+      - ZK-proof-based signing
+      - Email-based signing
+      Each should note it's purely additive — new verifier crates, no changes to the smart account
+      or factory core required, since `Signer::External(verifier, key_data)` is already generic.
+- [ ] **Broader OSS-readiness audit pass** — docs clarity, contribution-friendliness, remaining
+      gaps — once current in-flight work is done. Deliberately deferred, not started.
 
 ## Governance docs
 
