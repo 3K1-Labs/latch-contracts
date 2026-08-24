@@ -16,9 +16,13 @@ got wrong on the first pass here — read the note before you repeat the mistake
 - [x] **`LICENSE`** — pick one and commit it at the repo root. We went with plain MIT
       (`Copyright (c) 2026 3K1 Labs`). Don't overthink this one unless you have a specific reason
       to want Apache-2.0's explicit patent grant instead.
-- [ ] **`CODE_OF_CONDUCT.md`** — decide per-repo, don't assume the same answer everywhere. We
-      deliberately skipped it here. If you want one, don't write your own — use the Contributor
-      Covenant v2.0 template verbatim and just swap the enforcement contact email.
+- [x] **`CODE_OF_CONDUCT.md`** — decide per-repo, don't assume the same answer everywhere. Added
+      2026-08-22, matching `latch-mobile`'s style rather than the verbatim Contributor Covenant
+      template originally recommended here — a short, project-voiced version with a
+      contracts-specific addition (no introducing vulnerabilities, no disclosing security issues
+      publicly before they're fixed, no soliciting private keys), "Adapted from" the Covenant
+      rather than a verbatim copy. Worth revisiting this checklist's original "use it verbatim"
+      guidance for other repos too, now that there's a real precedent that reads better.
 - [x] **`CONTRIBUTING.md`** — document your actual contribution workflow, not an aspirational one.
       Ours: fork + issue-first (no PR without a prior issue, except trivial fixes), a per-crate
       command checklist, and an explicit AI-assisted-contribution policy (see §4). Copy the shape,
