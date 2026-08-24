@@ -19,6 +19,7 @@ body:
         - policies/weighted-threshold-policy
         - policies/session-policy
         - policies/spending-limit-policy
+        - policies/recipient-allowlist-policy
         - Other / not sure
     validations:
       required: true
