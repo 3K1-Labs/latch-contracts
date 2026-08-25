@@ -33,6 +33,7 @@ latch-contracts/
 │   └── spending-limit-policy/       # ✅ Spending-limit policy
 ├── demo/                        # Demo/reference code — not shipped, not deployed for real use
 │   └── modified-ed25519-verifier/   # Wallet-signing-popup wrapping pattern, kept for reference
+├── fee-forwarder/                # ✅ Permissioned fee forwarder for gasless (sponsored) transactions
 ├── factory-spec.md              # Behavioral spec for the factory
 └── UPGRADE_PATH.md              # Account & factory upgrade path decision
 ```
@@ -80,6 +81,10 @@ Restricts a context rule's signers to an allow-listed set of contract function n
 ### Spending Limit Policy — `policies/spending-limit-policy/` ✅
 
 Thin wrapper around OZ's `stellar-accounts` spending-limit policy. Enforces a rolling spend cap per context rule.
+
+### Fee Forwarder — `fee-forwarder/` ✅
+
+Singleton, permissioned contract that lets `latch-relayer` sponsor gasless transactions for Latch accounts holding no XLM. Thin wrapper around OZ's `stellar-fee-abstraction` helpers, following OZ's `examples/fee-forwarder-permissioned` reference. An account signs one authorization tree covering `forward()`, with sub-invocations for the fee-token `approve` and the actual target call; the relayer (gated to the `executor` role) fills in the real `fee_amount` (`<=` the user's signed cap) and submits, paying the network's XLM fee itself. The contract collects the fee and forwards the target call atomically — either both succeed or the whole transaction reverts. `enable_fee_token`/`disable_fee_token`/`sweep_tokens` are manager-gated. Off-chain quoting, holding the executor credential, and submitting `forward()` transactions are out of scope here — tracked in the companion `latch-relayer` issue.
 
 ### Demo — `demo/` ⚠️
 

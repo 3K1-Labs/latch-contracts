@@ -72,6 +72,7 @@ jobs:
           - policies/session-policy
           - policies/spending-limit-policy
           - demo/modified-ed25519-verifier
+          - fee-forwarder
 
     steps:
       - uses: actions/checkout@v4
