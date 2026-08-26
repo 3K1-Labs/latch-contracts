@@ -11,7 +11,10 @@ use soroban_sdk::{
 };
 use spending_limit_policy::SpendingLimitPolicy;
 use stellar_accounts::{
-    policies::{spending_limit::SpendingLimitAccountParams, Policy},
+    policies::{
+        simple_threshold::SimpleThresholdAccountParams, spending_limit::SpendingLimitAccountParams,
+        Policy,
+    },
     smart_account::{self as smart_account, AuthPayload, ContextRuleType, Signer},
 };
 
@@ -499,4 +502,98 @@ fn session_plus_spending_limit_disallowed_method_rejected_even_when_under_limit(
     env.as_contract(&account_id, || {
         let _ = smart_account::do_check_auth(&env, &payload_hash, &signatures, &auth_contexts);
     });
+}
+
+// ################## REMOVE_SIGNER_CHECKED TESTS ##################
+//
+// These tests exercise `remove_signer_checked`, which probes attached
+// policies via `try_invoke_contract` before delegating to OZ's
+// `storage::remove_signer`. The threshold-policy's `would_remain_reachable`
+// function is the first policy-side implementation.
+
+/// Sets up a smart account with N signers and a threshold-policy installed
+/// at the given threshold, returning the account and client.
+fn setup_with_threshold(
+    env: &Env,
+    signer_count: u32,
+    threshold: u32,
+) -> (Address, LatchSmartAccountClient<'_>) {
+    env.mock_all_auths();
+
+    let mut signers = Vec::new(env);
+    for _ in 0..signer_count {
+        signers.push_back(Signer::Delegated(Address::generate(env)));
+    }
+    let policies = Map::new(env);
+    let (account_id, client) = register_account(env, &signers, &policies);
+
+    // Deploy the threshold-policy contract and attach it to context rule #0.
+    // `add_policy` internally calls the policy's `install`, which stores
+    // the threshold in the policy contract's own persistent storage, keyed
+    // by (smart_account_address, context_rule_id).
+    let threshold_policy_id = env.register(threshold_policy::ThresholdPolicy, ());
+    let install_param: Val = SimpleThresholdAccountParams { threshold }.into_val(env);
+    client.add_policy(&0, &threshold_policy_id, &install_param);
+
+    (account_id, client)
+}
+
+#[test]
+fn remove_signer_checked_succeeds_when_reachable() {
+    let env = Env::default();
+    // 3 signers, threshold=2. Remove one → 2 remaining ≥ 2 → ok.
+    let (_account_id, client) = setup_with_threshold(&env, 3, 2);
+
+    env.mock_all_auths();
+    client.remove_signer_checked(&0, &0);
+
+    let rule = client.get_context_rule(&0);
+    assert_eq!(rule.signers.len(), 2);
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #1)")]
+fn remove_signer_checked_panics_when_unreachable() {
+    let env = Env::default();
+    // 3 signers, threshold=3. Remove one → 2 remaining < 3 → blocked.
+    let (_account_id, client) = setup_with_threshold(&env, 3, 3);
+
+    env.mock_all_auths();
+    client.remove_signer_checked(&0, &0);
+}
+
+#[test]
+fn remove_signer_checked_succeeds_with_non_threshold_policy() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let signers = default_signers(&env);
+    let policies = Map::new(&env);
+    let (_account_id, client) = register_account(&env, &signers, &policies);
+
+    // Attach MockPolicyContract — does not implement would_remain_reachable,
+    // so the probe is skipped ("no opinion").
+    let mock_policy_id = env.register(MockPolicyContract, ());
+    let install_param: Val = Val::from_void().into();
+    client.add_policy(&0, &mock_policy_id, &install_param);
+
+    // The default rule has 1 signer. remove_signer_checked should work
+    // because the mock policy doesn't object.
+    client.remove_signer_checked(&0, &0);
+
+    let rule = client.get_context_rule(&0);
+    assert_eq!(rule.signers.len(), 0);
+    // Last signer removed but a policy remains — allowed by OZ.
+}
+
+#[test]
+#[should_panic]
+fn remove_signer_checked_requires_self_auth() {
+    let env = Env::default();
+    // No mock_all_auths — auth should fail.
+    let signers = default_signers(&env);
+    let policies = Map::new(&env);
+    let (_account_id, client) = register_account(&env, &signers, &policies);
+
+    client.remove_signer_checked(&0, &0);
 }
