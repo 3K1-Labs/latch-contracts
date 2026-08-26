@@ -1,9 +1,10 @@
-﻿//! Oracle-denominated multi-token spending limit policy for Latch smart accounts.
+﻿//! Oracle-denominated multi-token spending limit policy for Latch smart
+//! accounts.
 #![no_std]
 
 use soroban_sdk::{
-    auth::Context, contract, contracterror, contractimpl, contracttype, Address, Env,
-    Symbol, Val, Vec,
+    auth::Context, contract, contracterror, contractimpl, contracttype, Address, Env, Symbol, Val,
+    Vec,
 };
 use stellar_accounts::{
     policies::Policy,
@@ -65,14 +66,12 @@ impl Policy for MultiTokenSpendingLimitPolicy {
         smart_account: Address,
     ) {
         let id = context_rule.id;
-        e.storage().persistent().set(
-            &DataKey::Limit(smart_account.clone(), id),
-            &install_params.spending_limit_usd,
-        );
-        e.storage().persistent().set(
-            &DataKey::Oracle(smart_account.clone(), id),
-            &install_params.oracle_address,
-        );
+        e.storage()
+            .persistent()
+            .set(&DataKey::Limit(smart_account.clone(), id), &install_params.spending_limit_usd);
+        e.storage()
+            .persistent()
+            .set(&DataKey::Oracle(smart_account.clone(), id), &install_params.oracle_address);
         e.storage().persistent().set(
             &DataKey::AllowedTokens(smart_account.clone(), id),
             &install_params.allowed_tokens,
@@ -133,9 +132,7 @@ impl Policy for MultiTokenSpendingLimitPolicy {
             panic!("stale oracle price");
         }
 
-        let amount_usd = amount
-            .saturating_mul(price_data.price_usd)
-            .saturating_div(100_000_000);
+        let amount_usd = amount.saturating_mul(price_data.price_usd).saturating_div(100_000_000);
 
         let limit: i128 = e
             .storage()
@@ -163,9 +160,6 @@ impl Policy for MultiTokenSpendingLimitPolicy {
         }
 
         kept.push_back(SpendingEntry { amount_usd, ledger: current });
-        e.storage().persistent().set(
-            &DataKey::SpendingEntries(smart_account, id),
-            &kept,
-        );
+        e.storage().persistent().set(&DataKey::SpendingEntries(smart_account, id), &kept);
     }
 }
