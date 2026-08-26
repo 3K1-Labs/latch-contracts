@@ -298,6 +298,9 @@ impl TimelockPolicy {
     /// # Arguments
     ///
     /// * `e` - Access to the Soroban environment.
+    /// * `caller` - The address requesting cancellation. Must be
+    ///   authorized: either in the `cancellable_by` list, or if that list
+    ///   is empty, the smart account itself.
     /// * `smart_account` - The address of the smart account that owns this
     ///   proposal.
     /// * `proposal_id` - The ID of the proposal to cancel.
@@ -313,7 +316,9 @@ impl TimelockPolicy {
     ///
     /// * topics - `["timelock_cancelled", smart_account: Address]`
     /// * data - `[context_rule_id: u32, proposal_id: u32]`
-    pub fn cancel(e: Env, smart_account: Address, proposal_id: u32) {
+    pub fn cancel(e: Env, caller: Address, smart_account: Address, proposal_id: u32) {
+        caller.require_auth();
+
         let key = TimelockStorageKey::Proposal(smart_account.clone(), proposal_id);
         let proposal: PendingProposal = e
             .storage()
@@ -321,13 +326,8 @@ impl TimelockPolicy {
             .get(&key)
             .unwrap_or_else(|| panic_with_error!(e, TimelockError::ProposalNotFound));
 
-        // Check authorization: caller must be in cancellable_by or be a
-        // signer on the context rule.
-        let caller = e.current_contract_address();
-        let config_key = TimelockStorageKey::Config(
-            smart_account.clone(),
-            proposal.context_rule_id,
-        );
+        let config_key =
+            TimelockStorageKey::Config(smart_account.clone(), proposal.context_rule_id);
         let config: TimelockConfig = e
             .storage()
             .persistent()
@@ -335,13 +335,12 @@ impl TimelockPolicy {
             .unwrap_or_else(|| panic_with_error!(e, TimelockError::NotInstalled));
 
         if config.cancellable_by.is_empty() {
-            // If cancellable_by is empty, require the caller to be a
-            // signer on the context rule. In practice, this means the
-            // cancel must be invoked by the smart account itself (via
-            // self-authorization) since context rule signers are checked
-            // during `enforce`, not at this level. For v1, we require
-            // the smart account to authorize the cancel.
-            smart_account.require_auth();
+            // If cancellable_by is empty, only the smart account itself
+            // can cancel (via self-authorization through its context
+            // rule signers).
+            if caller != smart_account {
+                panic_with_error!(e, TimelockError::UnauthorizedCancel);
+            }
         } else {
             // Check if caller is in the cancellable_by list.
             if !config.cancellable_by.contains(&caller) {
@@ -371,11 +370,7 @@ impl TimelockPolicy {
     ///
     /// * [`TimelockError::ProposalNotFound`] - When the proposal does not
     ///   exist or has already been executed/cancelled.
-    pub fn get_proposal(
-        e: &Env,
-        smart_account: &Address,
-        proposal_id: u32,
-    ) -> PendingProposal {
+    pub fn get_proposal(e: &Env, smart_account: &Address, proposal_id: u32) -> PendingProposal {
         let key = TimelockStorageKey::Proposal(smart_account.clone(), proposal_id);
         e.storage()
             .persistent()
@@ -403,11 +398,7 @@ impl TimelockPolicy {
     ///
     /// * [`TimelockError::NotInstalled`] - When the policy is not installed
     ///   for the given smart account and context rule.
-    pub fn get_config(
-        e: &Env,
-        context_rule_id: u32,
-        smart_account: &Address,
-    ) -> TimelockConfig {
+    pub fn get_config(e: &Env, context_rule_id: u32, smart_account: &Address) -> TimelockConfig {
         let key = TimelockStorageKey::Config(smart_account.clone(), context_rule_id);
         e.storage()
             .persistent()
@@ -513,8 +504,7 @@ fn install_timelock(
 fn uninstall_timelock(e: &Env, context_rule: &ContextRule, smart_account: &Address) {
     smart_account.require_auth();
 
-    let config_key =
-        TimelockStorageKey::Config(smart_account.clone(), context_rule.id);
+    let config_key = TimelockStorageKey::Config(smart_account.clone(), context_rule.id);
     if !e.storage().persistent().has(&config_key) {
         panic_with_error!(e, TimelockError::NotInstalled);
     }
@@ -522,15 +512,11 @@ fn uninstall_timelock(e: &Env, context_rule: &ContextRule, smart_account: &Addre
     e.storage().persistent().remove(&config_key);
 
     // Clean up the next proposal ID counter.
-    let id_key =
-        TimelockStorageKey::NextProposalId(smart_account.clone(), context_rule.id);
+    let id_key = TimelockStorageKey::NextProposalId(smart_account.clone(), context_rule.id);
     e.storage().persistent().remove(&id_key);
 
-    TimelockUninstalled {
-        smart_account: smart_account.clone(),
-        context_rule_id: context_rule.id,
-    }
-    .publish(e);
+    TimelockUninstalled { smart_account: smart_account.clone(), context_rule_id: context_rule.id }
+        .publish(e);
 }
 
 /// Enforces the timelock policy: stores a pending proposal with the target
@@ -568,8 +554,7 @@ fn enforce_proposal(
         panic_with_error!(e, TimelockError::NoAuthenticatedSigners);
     }
 
-    let config_key =
-        TimelockStorageKey::Config(smart_account.clone(), context_rule.id);
+    let config_key = TimelockStorageKey::Config(smart_account.clone(), context_rule.id);
     let config: TimelockConfig = e
         .storage()
         .persistent()
@@ -585,12 +570,9 @@ fn enforce_proposal(
     let unlock_ledger = e.ledger().sequence() + config.delay_ledgers;
 
     // Allocate a proposal ID.
-    let id_key =
-        TimelockStorageKey::NextProposalId(smart_account.clone(), context_rule.id);
+    let id_key = TimelockStorageKey::NextProposalId(smart_account.clone(), context_rule.id);
     let proposal_id: u32 = e.storage().persistent().get(&id_key).unwrap_or(0u32);
-    e.storage()
-        .persistent()
-        .set(&id_key, &(proposal_id + 1));
+    e.storage().persistent().set(&id_key, &(proposal_id + 1));
 
     let proposal = PendingProposal {
         target: target.clone(),
@@ -601,8 +583,7 @@ fn enforce_proposal(
         context_rule_id: context_rule.id,
     };
 
-    let proposal_key =
-        TimelockStorageKey::Proposal(smart_account.clone(), proposal_id);
+    let proposal_key = TimelockStorageKey::Proposal(smart_account.clone(), proposal_id);
     e.storage().persistent().set(&proposal_key, &proposal);
 
     TimelockProposed {
