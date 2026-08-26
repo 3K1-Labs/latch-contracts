@@ -1,3 +1,5 @@
+#![cfg(test)]
+
 extern crate std;
 
 use soroban_sdk::{

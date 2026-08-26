@@ -167,7 +167,6 @@ fn verify_rejects_wrong_payload() {
     let pub_key = BytesN::<32>::from_array(&e, keypair.verifying_key().as_bytes());
 
     // Sign one hash, verify against a different hash
-    let _hash_a = test_payload(&e);
     let hash_b = Bytes::from_array(&e, &[0xffu8; 32]);
 
     let sig_bytes = phantom_sign(&keypair, &TEST_PAYLOAD);

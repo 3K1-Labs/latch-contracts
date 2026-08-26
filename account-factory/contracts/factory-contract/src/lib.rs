@@ -63,10 +63,10 @@ pub enum FactoryError {
     MissingThreshold = 5,
     InvalidThreshold = 6,
     InvalidEd25519Key = 7,
-    InvalidWebAuthnKey = 9,
-    InvalidEd25519Verifier = 10,
-    InvalidWebAuthnVerifier = 12,
-    InvalidThresholdPolicy = 13,
+    InvalidWebAuthnKey = 8,
+    InvalidEd25519Verifier = 9,
+    InvalidWebAuthnVerifier = 10,
+    InvalidThresholdPolicy = 11,
 }
 
 #[contractevent]
@@ -195,7 +195,8 @@ fn canonicalize_signers(env: &Env, signers: &Vec<AccountSignerInit>) -> Vec<Acco
         let mut idx = 0u32;
 
         while idx < canonical.len() {
-            let existing = canonical.get(idx).unwrap();
+            let existing =
+                canonical.get(idx).expect("canonicalize_signers: idx always < canonical.len()");
             match compare_signers(&existing, &signer) {
                 core::cmp::Ordering::Equal => {
                     panic_with_error!(env, FactoryError::DuplicateSigner);
@@ -230,7 +231,7 @@ fn compare_signers(left: &AccountSignerInit, right: &AccountSignerInit) -> core:
         ) => signer_kind_code(left_external.signer_kind)
             .cmp(&signer_kind_code(right_external.signer_kind))
             .then_with(|| left_external.key_data.cmp(&right_external.key_data)),
-        _ => core::cmp::Ordering::Equal,
+        _ => unreachable!("compare_signers called with mismatched signer variants"),
     })
 }
 
