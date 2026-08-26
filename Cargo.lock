@@ -1416,6 +1416,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "secp256k1-verifier"
+version = "0.0.0"
+dependencies = [
+ "k256",
+ "soroban-sdk",
+ "stellar-accounts",
+]
+
+[[package]]
 name = "semver"
 version = "1.0.28"
 source = "registry+https://github.com/rust-lang/crates.io-index"

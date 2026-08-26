@@ -63,6 +63,7 @@ Stateless singleton contracts that verify signatures on behalf of smart accounts
 | Contract | Signer type | Key format | Status |
 |---|---|---|---|
 | `ed25519-verifier` | Any Ed25519 signer — native keys, SDK-integrated wallets | 32-byte Ed25519 public key | ✅ Implemented |
+| `secp256k1-verifier` | Any secp256k1 signer — MetaMask, other EVM wallets | 65-byte uncompressed secp256k1 key (0x04 + X + Y) | ✅ Implemented |
 | `webauthn-verifier` | Passkeys, Face ID, Touch ID, YubiKey | 65-byte P-256 key + credential ID | ✅ Implemented |
 
 ### Threshold Policy — `policies/threshold-policy/` ✅
