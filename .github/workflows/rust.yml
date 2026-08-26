@@ -54,24 +54,42 @@ jobs:
         if: needs.changes.outputs.code == 'true'
         run: cargo +nightly fmt --all -- --check
 
-  build-and-test:
+  # Computes the current workspace member list straight from `Cargo.toml` via
+  # `cargo metadata`, so `build-and-test`'s matrix always covers every crate
+  # actually in the workspace. Adding a crate to `[workspace] members` is
+  # already mandatory for it to build at all — this makes that the *only*
+  # thing required for CI to pick it up too, instead of also requiring a
+  # separately hand-maintained matrix list that's easy to forget (as PRs #50
+  # and #56 did — both added a crate to the workspace without adding a
+  # matrix entry, so neither crate's build/test/clippy ever ran in CI; #50's
+  # crate turned out to not even compile, entirely undetected as a result).
+  discover-workspace:
     needs: changes
+    runs-on: ubuntu-latest
+    outputs:
+      workspace_dirs: ${{ steps.list.outputs.workspace_dirs }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          toolchain: stable
+
+      - name: List workspace member directories
+        id: list
+        run: |
+          dirs=$(cargo metadata --no-deps --format-version 1 \
+            | jq -c --arg root "$PWD/" '[.packages[].manifest_path | sub("^" + $root; "") | sub("/Cargo.toml$"; "")]')
+          echo "workspace_dirs=$dirs" >> "$GITHUB_OUTPUT"
+
+  build-and-test:
+    needs: [changes, discover-workspace]
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        workspace:
-          - latch-smart-account
-          - account-factory/contracts/factory-contract
-          - account-factory/contracts/dummy-account
-          - account-factory/contracts/dummy-singleton
-          - latch-verifiers/ed25519-verifier
-          - latch-verifiers/webauthn-verifier
-          - policies/threshold-policy
-          - policies/weighted-threshold-policy
-          - policies/session-policy
-          - policies/spending-limit-policy
-          - demo/modified-ed25519-verifier
+        workspace: ${{ fromJSON(needs.discover-workspace.outputs.workspace_dirs) }}
 
     steps:
       - uses: actions/checkout@v4
