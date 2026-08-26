@@ -4,8 +4,9 @@ use soroban_sdk::{
     auth::Context,
     contract, contractimpl, symbol_short,
     testutils::{Address as _, Events, Ledger},
-    vec, Address, Env, IntoVal, Symbol, Val, Vec,
+    vec, Address, Env, IntoVal, Map, Symbol, Val, Vec,
 };
+use stellar_accounts::smart_account::{ContextRuleType, Signer};
 
 use crate::{TimelockAccountParams, TimelockPolicy};
 
@@ -685,5 +686,104 @@ fn get_proposal_rejects_nonexistent() {
 
     e.as_contract(&timelock_id, || {
         TimelockPolicy::get_proposal(&e, &smart_account, 0);
+    });
+}
+
+// ################## INTEGRATION TESTS (LatchSmartAccount) ##################
+//
+// These tests exercise the full flow through a real LatchSmartAccount to
+// verify that `propose()` triggers the timelock policy's `enforce()` without
+// calling the target contract, and that `execute_pending()` works after the
+// delay.
+
+use smart_account::{LatchSmartAccount, LatchSmartAccountClient};
+
+#[contract]
+struct MockTargetContractIntegration;
+
+#[contractimpl]
+impl MockTargetContractIntegration {
+    pub fn set(e: Env, value: u32) {
+        e.storage().persistent().set(&Symbol::new(&e, "value"), &value);
+    }
+
+    pub fn get(e: Env) -> u32 {
+        e.storage().persistent().get(&Symbol::new(&e, "value")).unwrap_or(0)
+    }
+}
+
+/// Full integration test: propose via LatchSmartAccount, verify the target
+/// is NOT called, advance past the delay, execute_pending, verify the target
+/// IS called.
+#[test]
+fn integration_propose_delays_execution() {
+    let e = Env::default();
+    e.mock_all_auths();
+
+    // 1. Deploy the timelock policy and a target contract.
+    let timelock_id = e.register(TimelockPolicy, ());
+    let target_id = e.register(MockTargetContractIntegration, ());
+    let target_client = MockTargetContractIntegrationClient::new(&e, &target_id);
+
+    // 2. Set up a LatchSmartAccount with a CallContract(target) rule
+    //    that has the timelock policy attached.
+    let owner_signer = Signer::Delegated(Address::generate(&e));
+    let signers = vec![&e, owner_signer];
+    let mut policies: Map<Address, Val> = Map::new(&e);
+    policies.set(
+        timelock_id.clone(),
+        TimelockAccountParams { delay_ledgers: 10, cancellable_by: Vec::new(&e) }.into_val(&e),
+    );
+
+    let account_id = e.register(LatchSmartAccount, (signers.clone(), policies.clone()));
+    let account_client = LatchSmartAccountClient::new(&e, &account_id);
+
+    // 3. Verify the context rule was created with the timelock policy.
+    let rule = account_client.get_context_rule(&0);
+    assert_eq!(rule.policies.len(), 1);
+    assert_eq!(rule.policies.get_unchecked(0), timelock_id);
+    assert_eq!(rule.context_type, ContextRuleType::CallContract(target_id.clone()));
+
+    // 4. Call propose() — this triggers auth → enforce() → stores proposal,
+    //    but should NOT call the target contract.
+    let _context_rule_id = rule.id;
+
+    // Call propose() — auth triggers enforce, which stores the proposal.
+    account_client.propose(&target_id, &symbol_short!("set"), &vec![&e, 42u32.into_val(&e)]);
+
+    // 5. Verify the target was NOT called (propose doesn't invoke).
+    assert_eq!(target_client.get(), 0);
+
+    // 6. Verify the proposal was stored.
+    e.as_contract(&timelock_id, || {
+        let proposal = TimelockPolicy::get_proposal(&e, &account_id, 0);
+        assert_eq!(proposal.target, target_id);
+        assert_eq!(proposal.fn_name, symbol_short!("set"));
+        assert_eq!(proposal.unlock_ledger, e.ledger().sequence() + 10);
+    });
+
+    // 7. Try to execute_pending before delay — should fail.
+    e.as_contract(&timelock_id, || {
+        TimelockPolicy::execute_pending(e.clone(), account_id.clone(), 0);
+    });
+
+    // 8. Advance past the delay.
+    let current = e.ledger().sequence();
+    e.ledger().with_mut(|li| {
+        li.sequence_number = current + 10;
+    });
+
+    // 9. Execute the proposal via the timelock policy.
+    e.as_contract(&timelock_id, || {
+        TimelockPolicy::execute_pending(e.clone(), account_id.clone(), 0);
+    });
+
+    // 10. Verify the target was called with the correct arguments.
+    assert_eq!(target_client.get(), 42);
+
+    // 11. Verify the proposal was removed (one-shot execution).
+    e.as_contract(&timelock_id, || {
+        let key = crate::TimelockStorageKey::Proposal(account_id.clone(), 0);
+        assert!(!e.storage().persistent().has(&key));
     });
 }

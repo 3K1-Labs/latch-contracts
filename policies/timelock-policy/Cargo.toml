@@ -15,3 +15,4 @@ stellar-accounts = { workspace = true }
 [dev-dependencies]
 soroban-sdk = { workspace = true, features = ["testutils"] }
 stellar-accounts = { workspace = true }
+smart-account = { path = "../../latch-smart-account" }

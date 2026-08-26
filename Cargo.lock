@@ -1981,6 +1981,7 @@ dependencies = [
 name = "timelock-policy"
 version = "0.0.0"
 dependencies = [
+ "smart-account",
  "soroban-sdk",
  "stellar-accounts",
 ]

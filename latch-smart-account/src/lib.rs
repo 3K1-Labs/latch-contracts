@@ -32,6 +32,31 @@ impl LatchSmartAccount {
         e.current_contract_address().require_auth();
         smart_account::batch_add_signer(e, context_rule_id, &signers);
     }
+
+    /// Proposes a call through a timelock-protected context rule.
+    ///
+    /// Identical to `execute()` in that it triggers `require_auth()` and the
+    /// full policy enforcement pipeline, but does **not** call the target
+    /// contract afterward. Policies whose `enforce()` stores a pending
+    /// proposal (e.g. `timelock-policy`) rely on this: the proposal is
+    /// recorded during the authorization phase, and the actual invocation
+    /// happens later via the policy's own `execute_pending()` entrypoint.
+    ///
+    /// For context rules without a timelock policy, calling `propose()` is
+    /// a no-op — auth succeeds but nothing is recorded and no call is made.
+    ///
+    /// # Arguments
+    ///
+    /// * `e` - Access to the Soroban environment.
+    /// * `target` - The address of the contract to propose calling.
+    /// * `target_fn` - The function name to propose invoking.
+    /// * `target_args` - Arguments to pass to the target function.
+    pub fn propose(e: Env, _target: Address, _target_fn: Symbol, _target_args: Vec<Val>) {
+        e.current_contract_address().require_auth();
+        // No invoke_contract — policies record proposals during the auth
+        // phase; delayed execution is handled by the policy's
+        // execute_pending() entrypoint.
+    }
 }
 
 #[contractimpl]

@@ -1,6 +1,6 @@
 # Timelock Policy for Delayed Execution — Audit & Implementation Plan
 
-> **Status:** Draft for review. No code written. Awaiting approval before proceeding.
+> **Status:** Implemented. See PR #55 for the full implementation.
 > **Branch:** `feature/timelock-policy` (created off `fork/main`, clean and up to date)
 > **Scope:** v1 — one fixed delay per context rule installation, no variable per-action delay, no guardian-triggered recovery.
 
@@ -46,7 +46,7 @@ Smart account __check_auth(signature_payload, signatures, auth_contexts)
 
 **What this means for the timelock:** Steps 1–5 handle cryptographic auth. Step 6 is where policies intervene. A timelock's `enforce()` runs at step 6 and can store proposal data, but the transaction is still in the authorization phase — the actual contract call (the `Context::Contract` invocation) hasn't happened yet. The call happens *after* `do_check_auth` returns `Ok(())`.
 
-### 1.3 The `execute()` Entrypoint
+### 1.3 The `execute()` Entrypoint and the Architectural Constraint
 
 **Source:** `ExecutionEntryPoint` trait in `stellar_accounts::smart_account`
 
@@ -61,12 +61,20 @@ fn execute(e: &Env, target: Address, target_fn: Symbol, target_args: Vec<Val>) {
 
 **Key findings:**
 - `execute()` is a public entrypoint on the smart account contract
-- It requires `require_auth()` from the smart account itself (self-authorization)
-- It calls `e.invoke_contract()` to forward the call to the target
-- It does **not** invoke any policy's `enforce()` — it's a raw forwarder
-- There is no hook, callback, or extension point where a policy could intercept `execute()` calls
+- Its first line, `require_auth()`, triggers the entire `__check_auth → do_check_auth → enforce()` chain described in Section 1.2
+- After `require_auth()` succeeds (which is when `enforce()` runs and stores the proposal), `execute()` immediately calls `invoke_contract()` in the same transaction
+- This means: **a policy's `enforce()` can only panic (blocking everything) or succeed (allowing `invoke_contract()` to proceed immediately)**. There is no mechanism to say "store this proposal and don't execute yet."
 
-**Answer to the open question:** The second execute step (actually performing the delayed action) **does NOT need `latch-smart-account` cooperation.** The timelock policy contract can implement its own `execute()` entrypoint as an independent function. The smart account's `execute()` entrypoint is only relevant for the *proposal* phase (where the smart account calls the timelock contract to propose an action). The *execution* phase is a direct call to the timelock contract by any authorized party.
+**The core problem:** `enforce()` is a validation hook, not an execution gate. It runs as a side-effect of `require_auth()`. After it succeeds, `execute()` unconditionally calls `invoke_contract()`. This means the current architecture cannot actually delay execution — the call proceeds immediately, and a `PendingProposal` is left in storage that can be re-executed later via `execute_pending()`, causing a double execution.
+
+**The fix — `propose()` entrypoint:** The solution is to add a `propose()` method to `LatchSmartAccount` that triggers `require_auth()` (and thus `enforce()`) but does **not** call `invoke_contract()`. This gives callers two paths:
+
+1. **`execute(target, fn, args)`** — standard immediate execution (for non-timelock calls)
+2. **`propose(target, fn, args)`** — triggers auth + stores proposal without executing (for timelock-protected calls)
+
+The actual execution of the delayed action happens later via the timelock policy's `execute_pending()` entrypoint.
+
+**Note on `execute_pending()` caller identity:** When `execute_pending()` calls `e.invoke_contract()`, the target contract sees the timelock policy as the caller, not the smart account. For access-controlled targets, this may require the timelock policy to be an authorized operator. This is a known limitation for v1.
 
 ### 1.4 Existing "Canceller" / "Another Signer" Concepts
 
@@ -340,15 +348,33 @@ pub fn execute_pending(
 ```rust
 pub fn cancel(
     e: Env,
+    caller: Address,
     smart_account: Address,
     proposal_id: u32,
 )
 ```
 
+- Requires `caller.require_auth()`.
 - Reads the `PendingProposal` from storage.
-- Validates the caller is in the `cancellable_by` list (or is a signer on the context rule if `cancellable_by` is empty).
+- Validates the caller is in the `cancellable_by` list (or is the smart account itself if `cancellable_by` is empty).
 - Removes the proposal from storage.
 - Emits `TimelockCancelled` event.
+
+#### `propose` (entrypoint on `LatchSmartAccount`)
+
+```rust
+pub fn propose(e: Env, _target: Address, _target_fn: Symbol, _target_args: Vec<Val>) {
+    e.current_contract_address().require_auth();
+    // No invoke_contract — policies record proposals during the auth
+    // phase; delayed execution is handled by the policy's
+    // execute_pending() entrypoint.
+}
+```
+
+- Triggers `require_auth()`, which runs the full `do_check_auth → enforce()` pipeline.
+- Does NOT call `invoke_contract()`, so the target contract is not invoked immediately.
+- The timelock policy's `enforce()` stores the proposal during the auth phase.
+- Actual execution happens later via `execute_pending()`.
 
 #### `get_pending_proposals` (read-only entrypoint)
 
@@ -362,15 +388,29 @@ pub fn get_pending_proposals(
 
 Returns all pending (not yet executed or cancelled) proposals for a given smart account and context rule.
 
-### 2.5 Design Decision: How Does `enforce()` Communicate the Proposal ID?
+### 2.5 Design Decision: Proposal Flow and the `propose()` Entrypoint
 
-The `Policy::enforce()` trait signature returns `()` — it cannot return a value to the caller. But the caller (the smart account's authorization flow) needs to know the proposal ID to later call `execute_pending()`.
+**Problem:** As documented in Section 1.3, `execute()` unconditionally calls `invoke_contract()` after `require_auth()` succeeds. A policy's `enforce()` can store a proposal during the auth phase, but cannot prevent the subsequent `invoke_contract()` call. This means the current architecture cannot actually delay execution.
 
-**Proposed approach:** The proposal ID is communicated entirely through the `TimelockProposed` event. The event includes `proposal_id`, `smart_account`, and `context_rule_id`. Off-chain clients (or on-chain watchers) can index events to find the proposal ID. On-chain, `execute_pending()` can also accept a linear scan of proposals for a given `(smart_account, context_rule_id)` if needed — but the event-based approach is cleaner and matches how Soroban event indexing works.
+**Solution:** Add a `propose()` entrypoint to `LatchSmartAccount`:
 
-**Alternative considered:** Having `propose()` as a separate entrypoint (not going through `enforce()`). This would allow returning the proposal ID directly. However, this breaks the policy model — `enforce()` is the canonical hook for intercepting authorized calls. Keeping the proposal inside `enforce()` ensures the timelock delay applies to *every* call through the context rule, not just calls explicitly routed to a `propose()` function. A separate `propose()` entrypoint would require callers to remember to use it, creating an escape hatch.
+```rust
+pub fn propose(e: Env, _target: Address, _target_fn: Symbol, _target_args: Vec<Val>) {
+    e.current_contract_address().require_auth();
+    // No invoke_contract — policies record proposals during the auth
+    // phase; delayed execution is handled by the policy's
+    // execute_pending() entrypoint.
+}
+```
 
-**Recommendation:** Use `enforce()` for proposals (mandatory delay for all calls), communicate proposal IDs via events. This is the safest v1 design.
+This triggers the same `__check_auth → do_check_auth → enforce()` chain as `execute()`, but does not call `invoke_contract()`. The timelock policy's `enforce()` stores the proposal, and the actual execution happens later via `execute_pending()`.
+
+**Proposal ID communication:** The `Policy::enforce()` trait signature returns `()` — it cannot return a value. The proposal ID is communicated via the `TimelockProposed` event. Off-chain clients index events to discover proposal IDs.
+
+**Tradeoffs:**
+- `propose()` requires callers to explicitly route through it instead of `execute()` — this is intentional, as it makes the timelock behavior explicit
+- For context rules without a timelock policy, `propose()` is a no-op (auth succeeds but nothing is recorded)
+- `execute_pending()` calls the target from the timelock policy contract, so the target sees the timelock as the caller (not the smart account). For v1, this is acceptable; v2 could route through the smart account.
 
 ### 2.6 v1 Scope Confirmation
 
@@ -414,17 +454,19 @@ Matching the acceptance criteria from the issue:
 
 ---
 
-## 3. Open Questions for Maintainer Review
+## 3. Resolved Design Questions
 
-1. **Proposal ID communication:** Is the event-based approach acceptable, or should we consider a separate `propose()` entrypoint that returns the ID? The event approach is safer (mandatory delay for all calls) but requires off-chain indexing to map proposal IDs.
+1. **Proposal ID communication:** Resolved — event-based. The `Policy::enforce()` trait returns `()`, so the proposal ID is communicated via the `TimelockProposed` event. Off-chain clients index events to discover proposal IDs.
 
-2. **Cancellation authorization:** Should cancellation be restricted to the `cancellable_by` list only, or should any signer on the context rule also be able to cancel? The `cancellable_by` list provides more granular control.
+2. **Cancellation authorization:** Resolved — `cancellable_by` list at install time. If empty, only the smart account itself can cancel (via `require_auth()`).
 
-3. **Storage cleanup on uninstall:** Should `uninstall()` fail if there are pending proposals, or should it clean them up silently? The `try_uninstall` pattern in `remove_context_rule` suggests silent cleanup is acceptable.
+3. **Storage cleanup on uninstall:** Resolved — silent cleanup. The `try_uninstall` pattern in `remove_context_rule` makes this consistent with other policies.
 
-4. **`execute_pending` authorization:** Who can call `execute_pending()`? The Zodiac model makes it permissionless ("anyone can execute the next transaction"). For v1, should it be permissionless (any address), or restricted to signers on the context rule?
+4. **`execute_pending` authorization:** Resolved — permissionless. Matches Zodiac's model. The delay provides the security guarantee; anyone can trigger execution after the delay.
 
-5. **Context type restriction:** Should the timelock only support `CallContract` rules, or also `Default` rules? `Default` rules match any context, which means the timelock would need to handle `CreateContract` contexts too. Recommendation: `CallContract` only for v1.
+5. **Context type restriction:** Resolved — `CallContract` only. `Default` rules match any context including `CreateContract`; the timelock needs a concrete target to invoke.
+
+6. **Smart account cooperation:** Resolved — `propose()` entrypoint added to `LatchSmartAccount`. This triggers auth + `enforce()` without calling `invoke_contract()`, allowing the timelock policy to store a proposal for delayed execution.
 
 ---
 
@@ -440,12 +482,15 @@ Matching the acceptance criteria from the issue:
 
 ---
 
-## 5. Next Steps (After Approval)
+## 5. Implementation Summary
 
-1. Implement `policies/timelock-policy/Cargo.toml`
-2. Implement `policies/timelock-policy/src/lib.rs` (types → errors → events → contract → Policy impl → entrypoints → helpers)
-3. Implement `policies/timelock-policy/src/test.rs`
-4. Wire into workspace root `Cargo.toml` and CI matrix
-5. Run `cargo fmt --all`, `cargo clippy`, `cargo test` from `policies/timelock-policy/`
-6. Run full workspace `cargo test` to verify no regressions
-7. Commit and open PR
+| File | Status | Purpose |
+|---|---|---|
+| `policies/timelock-policy/Cargo.toml` | ✅ Created | Crate manifest |
+| `policies/timelock-policy/src/lib.rs` | ✅ Created | Contract: types, errors, events, `Policy` impl, entrypoints |
+| `policies/timelock-policy/src/test.rs` | ✅ Created | Unit tests (17) + integration test (1) |
+| `latch-smart-account/src/lib.rs` | ✅ Modified | Added `propose()` entrypoint |
+| `latch-smart-account/src/test.rs` | ✅ Modified | Added `propose()` tests |
+| `Cargo.toml` (workspace root) | ✅ Modified | Added `policies/timelock-policy` to members |
+| `.github/workflows/rust.yml` | ✅ Modified | Added `policies/timelock-policy` to CI matrix |
+| `TIMELOCK_POLICY_PLAN.md` | ✅ Updated | Fixed architectural analysis, documented `propose()` approach |
