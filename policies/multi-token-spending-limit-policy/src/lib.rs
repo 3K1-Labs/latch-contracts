@@ -65,6 +65,27 @@ impl Policy for MultiTokenSpendingLimitPolicy {
         context_rule: ContextRule,
         smart_account: Address,
     ) {
+        smart_account.require_auth();
+
+        // Validate context rule type
+        if context_rule.context_type != ContextRuleType::CallContract {
+            panic!("multi-token spending limit requires CallContract context");
+        }
+
+        // Validate limit and period
+        if install_params.spending_limit_usd <= 0 || context_rule.period_ledgers == 0 {
+            panic!("invalid spending limit or period");
+        }
+
+        // Check already installed
+        let existing: Option<i128> = e
+            .storage()
+            .persistent()
+            .get(&DataKey::Limit(smart_account.clone(), context_rule.id));
+        if existing.is_some() {
+            panic!("policy already installed");
+        }
+
         let id = context_rule.id;
         e.storage()
             .persistent()
@@ -79,6 +100,27 @@ impl Policy for MultiTokenSpendingLimitPolicy {
     }
 
     fn uninstall(e: &Env, context_rule: ContextRule, smart_account: Address) {
+        smart_account.require_auth();
+
+        // Validate context rule type
+        if context_rule.context_type != ContextRuleType::CallContract {
+            panic!("multi-token spending limit requires CallContract context");
+        }
+
+        // Validate limit and period
+        if install_params.spending_limit_usd <= 0 || context_rule.period_ledgers == 0 {
+            panic!("invalid spending limit or period");
+        }
+
+        // Check already installed
+        let existing: Option<i128> = e
+            .storage()
+            .persistent()
+            .get(&DataKey::Limit(smart_account.clone(), context_rule.id));
+        if existing.is_some() {
+            panic!("policy already installed");
+        }
+
         let id = context_rule.id;
         e.storage().persistent().remove(&DataKey::Limit(smart_account.clone(), id));
         e.storage().persistent().remove(&DataKey::Oracle(smart_account.clone(), id));
@@ -93,6 +135,27 @@ impl Policy for MultiTokenSpendingLimitPolicy {
         context_rule: ContextRule,
         smart_account: Address,
     ) {
+        smart_account.require_auth();
+
+        // Validate context rule type
+        if context_rule.context_type != ContextRuleType::CallContract {
+            panic!("multi-token spending limit requires CallContract context");
+        }
+
+        // Validate limit and period
+        if install_params.spending_limit_usd <= 0 || context_rule.period_ledgers == 0 {
+            panic!("invalid spending limit or period");
+        }
+
+        // Check already installed
+        let existing: Option<i128> = e
+            .storage()
+            .persistent()
+            .get(&DataKey::Limit(smart_account.clone(), context_rule.id));
+        if existing.is_some() {
+            panic!("policy already installed");
+        }
+
         let id = context_rule.id;
 
         let Context::Contract(c) = context else {
@@ -104,6 +167,9 @@ impl Policy for MultiTokenSpendingLimitPolicy {
         }
 
         let amount: i128 = c.args.get(2).unwrap().try_into_val(e).unwrap();
+        if amount < 0 {
+            panic!("negative transfer amount");
+        }
         let target = c.contract;
 
         let allowed_tokens: Vec<Address> = e
@@ -127,8 +193,8 @@ impl Policy for MultiTokenSpendingLimitPolicy {
             .try_into()
             .unwrap();
 
-        let current = e.ledger().sequence();
-        if current.saturating_sub(price_data.updated_at as u32) > MAX_STALENESS_LEDGERS {
+        let current = e.ledger().timestamp();
+        if current.saturating_sub(price_data.updated_at) > MAX_STALENESS_LEDGERS as u64 * 5 {
             panic!("stale oracle price");
         }
 
