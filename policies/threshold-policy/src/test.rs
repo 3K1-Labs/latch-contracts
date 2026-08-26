@@ -39,9 +39,41 @@ fn would_remain_reachable_true_when_remaining_equals_threshold() {
         super::simple_threshold::install(&e, &params, &context_rule, &smart_account);
     });
 
+    // The context rule has 3 signers. Removing any one leaves 2 < 3 → NOT reachable.
+    // But threshold=3 with 3 signers → removing one → 2 remaining, so let's use
+    // threshold=2 with 3 signers: removing one → 2 remaining ≥ 2 → reachable.
+    let e2 = Env::default();
+    let address2 = e2.register(ThresholdPolicy, ());
+    let smart_account2 = Address::generate(&e2);
+    let context_rule2 = create_context_rule(&e2, 3);
+    e2.mock_all_auths();
+    e2.as_contract(&address2, || {
+        let params = super::SimpleThresholdAccountParams { threshold: 2 };
+        super::simple_threshold::install(&e2, &params, &context_rule2, &smart_account2);
+    });
+
+    let signer_to_remove = context_rule.signers.get_unchecked(0);
     e.as_contract(&address, || {
-        // 3 signers remain, threshold is 3 — reachable
-        assert!(ThresholdPolicy::would_remain_reachable(&e, 0, smart_account.clone(), 3,));
+        // 3 signers in rule, threshold=3. Removing one → 2 remaining < 3 → NOT reachable.
+        assert!(!ThresholdPolicy::would_remain_reachable(
+            &e,
+            0,
+            smart_account.clone(),
+            signer_to_remove.clone(),
+            2, // remaining_count after removing one from 3
+        ));
+    });
+
+    let signer_to_remove2 = context_rule2.signers.get_unchecked(0);
+    e2.as_contract(&address2, || {
+        // 3 signers in rule, threshold=2. Removing one → 2 remaining ≥ 2 → reachable.
+        assert!(ThresholdPolicy::would_remain_reachable(
+            &e2,
+            0,
+            smart_account2.clone(),
+            signer_to_remove2.clone(),
+            2, // remaining_count after removing one from 3
+        ));
     });
 }
 
@@ -59,9 +91,16 @@ fn would_remain_reachable_true_when_remaining_exceeds_threshold() {
         super::simple_threshold::install(&e, &params, &context_rule, &smart_account);
     });
 
+    let signer_to_remove = context_rule.signers.get_unchecked(0);
     e.as_contract(&address, || {
-        // 4 signers remain, threshold is 3 — reachable
-        assert!(ThresholdPolicy::would_remain_reachable(&e, 0, smart_account.clone(), 4,));
+        // 5 signers, threshold=3. Removing one → 4 remaining ≥ 3 → reachable.
+        assert!(ThresholdPolicy::would_remain_reachable(
+            &e,
+            0,
+            smart_account.clone(),
+            signer_to_remove.clone(),
+            4, // remaining_count after removing one from 5
+        ));
     });
 }
 
@@ -79,9 +118,16 @@ fn would_remain_reachable_false_when_remaining_below_threshold() {
         super::simple_threshold::install(&e, &params, &context_rule, &smart_account);
     });
 
+    let signer_to_remove = context_rule.signers.get_unchecked(0);
     e.as_contract(&address, || {
-        // 3 signers remain, threshold is 5 — NOT reachable
-        assert!(!ThresholdPolicy::would_remain_reachable(&e, 0, smart_account.clone(), 3,));
+        // 5 signers, threshold=5. Removing one → 4 remaining < 5 → NOT reachable.
+        assert!(!ThresholdPolicy::would_remain_reachable(
+            &e,
+            0,
+            smart_account.clone(),
+            signer_to_remove.clone(),
+            4, // remaining_count after removing one from 5
+        ));
     });
 }
 
@@ -95,24 +141,28 @@ fn would_remain_reachable_false_when_zero_remaining_and_nonzero_threshold() {
     e.mock_all_auths();
 
     e.as_contract(&address, || {
-        let params = super::SimpleThresholdAccountParams { threshold: 1 };
+        let params = super::SimpleThresholdAccountParams { threshold: 3 };
         super::simple_threshold::install(&e, &params, &context_rule, &smart_account);
     });
 
+    let signer_to_remove = context_rule.signers.get_unchecked(0);
     e.as_contract(&address, || {
-        // 0 signers remain, threshold is 1 — NOT reachable
-        assert!(!ThresholdPolicy::would_remain_reachable(&e, 0, smart_account.clone(), 0,));
+        // 3 signers, threshold=3. Removing one → 2 remaining < 3 → NOT reachable.
+        assert!(!ThresholdPolicy::would_remain_reachable(
+            &e,
+            0,
+            smart_account.clone(),
+            signer_to_remove.clone(),
+            2, // remaining_count after removing one from 3
+        ));
     });
 }
 
 #[test]
-fn would_remain_reachable_true_when_zero_remaining_and_zero_threshold() {
+fn would_remain_reachable_true_when_one_signer_and_threshold_one() {
     let e = Env::default();
     let address = e.register(ThresholdPolicy, ());
     let smart_account = Address::generate(&e);
-    // Threshold of 0 is invalid at install, so we set threshold=1 and
-    // verify the edge case where threshold=0 is never stored.
-    // Instead, test with threshold=1 and 1 remaining.
     let context_rule = create_context_rule(&e, 1);
 
     e.mock_all_auths();
@@ -122,8 +172,15 @@ fn would_remain_reachable_true_when_zero_remaining_and_zero_threshold() {
         super::simple_threshold::install(&e, &params, &context_rule, &smart_account);
     });
 
+    let signer_to_remove = context_rule.signers.get_unchecked(0);
     e.as_contract(&address, || {
-        // 1 signer remains, threshold is 1 — reachable
-        assert!(ThresholdPolicy::would_remain_reachable(&e, 0, smart_account.clone(), 1,));
+        // 1 signer, threshold=1. Removing the only signer → 0 remaining < 1 → NOT reachable.
+        assert!(!ThresholdPolicy::would_remain_reachable(
+            &e,
+            0,
+            smart_account.clone(),
+            signer_to_remove.clone(),
+            0, // remaining_count after removing the only signer
+        ));
     });
 }

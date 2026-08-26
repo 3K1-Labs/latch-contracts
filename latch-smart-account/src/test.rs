@@ -504,12 +504,16 @@ fn session_plus_spending_limit_disallowed_method_rejected_even_when_under_limit(
     });
 }
 
-// ################## REMOVE_SIGNER_CHECKED TESTS ##################
+// ################## REMOVE_SIGNER TESTS ##################
 //
-// These tests exercise `remove_signer_checked`, which probes attached
-// policies via `try_invoke_contract` before delegating to OZ's
-// `storage::remove_signer`. The threshold-policy's `would_remain_reachable`
-// function is the first policy-side implementation.
+// These tests exercise the `remove_signer` override on
+// `LatchSmartAccount`, which probes attached policies via
+// `try_invoke_contract` before delegating to OZ's `storage::remove_signer`.
+// The threshold-policy and weighted-threshold-policy both implement
+// `would_remain_reachable`; non-threshold policies are skipped.
+
+use weighted_threshold_policy::WeightedThresholdPolicy;
+use stellar_accounts::policies::weighted_threshold::WeightedThresholdAccountParams;
 
 /// Sets up a smart account with N signers and a threshold-policy installed
 /// at the given threshold, returning the account and client.
@@ -527,10 +531,6 @@ fn setup_with_threshold(
     let policies = Map::new(env);
     let (account_id, client) = register_account(env, &signers, &policies);
 
-    // Deploy the threshold-policy contract and attach it to context rule #0.
-    // `add_policy` internally calls the policy's `install`, which stores
-    // the threshold in the policy contract's own persistent storage, keyed
-    // by (smart_account_address, context_rule_id).
     let threshold_policy_id = env.register(threshold_policy::ThresholdPolicy, ());
     let install_param: Val = SimpleThresholdAccountParams { threshold }.into_val(env);
     client.add_policy(&0, &threshold_policy_id, &install_param);
@@ -539,13 +539,13 @@ fn setup_with_threshold(
 }
 
 #[test]
-fn remove_signer_checked_succeeds_when_reachable() {
+fn remove_signer_succeeds_when_reachable() {
     let env = Env::default();
     // 3 signers, threshold=2. Remove one → 2 remaining ≥ 2 → ok.
     let (_account_id, client) = setup_with_threshold(&env, 3, 2);
 
     env.mock_all_auths();
-    client.remove_signer_checked(&0, &0);
+    client.remove_signer(&0, &0);
 
     let rule = client.get_context_rule(&0);
     assert_eq!(rule.signers.len(), 2);
@@ -553,17 +553,17 @@ fn remove_signer_checked_succeeds_when_reachable() {
 
 #[test]
 #[should_panic(expected = "Error(Contract, #1)")]
-fn remove_signer_checked_panics_when_unreachable() {
+fn remove_signer_panics_when_unreachable() {
     let env = Env::default();
     // 3 signers, threshold=3. Remove one → 2 remaining < 3 → blocked.
     let (_account_id, client) = setup_with_threshold(&env, 3, 3);
 
     env.mock_all_auths();
-    client.remove_signer_checked(&0, &0);
+    client.remove_signer(&0, &0);
 }
 
 #[test]
-fn remove_signer_checked_succeeds_with_non_threshold_policy() {
+fn remove_signer_succeeds_with_non_threshold_policy() {
     let env = Env::default();
     env.mock_all_auths();
 
@@ -577,9 +577,9 @@ fn remove_signer_checked_succeeds_with_non_threshold_policy() {
     let install_param: Val = Val::from_void().into();
     client.add_policy(&0, &mock_policy_id, &install_param);
 
-    // The default rule has 1 signer. remove_signer_checked should work
+    // The default rule has 1 signer. remove_signer should work
     // because the mock policy doesn't object.
-    client.remove_signer_checked(&0, &0);
+    client.remove_signer(&0, &0);
 
     let rule = client.get_context_rule(&0);
     assert_eq!(rule.signers.len(), 0);
@@ -588,12 +588,80 @@ fn remove_signer_checked_succeeds_with_non_threshold_policy() {
 
 #[test]
 #[should_panic]
-fn remove_signer_checked_requires_self_auth() {
+fn remove_signer_requires_self_auth() {
     let env = Env::default();
     // No mock_all_auths — auth should fail.
     let signers = default_signers(&env);
     let policies = Map::new(&env);
     let (_account_id, client) = register_account(&env, &signers, &policies);
 
-    client.remove_signer_checked(&0, &0);
+    client.remove_signer(&0, &0);
+}
+
+#[test]
+fn remove_signer_blocked_by_weighted_threshold_policy() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let signer_a = Signer::Delegated(Address::generate(&env));
+    let signer_b = Signer::Delegated(Address::generate(&env));
+    let signer_c = Signer::Delegated(Address::generate(&env));
+    let signers = vec![&env, signer_a.clone(), signer_b.clone(), signer_c.clone()];
+    let policies = Map::new(&env);
+    let (_account_id, client) = register_account(&env, &signers, &policies);
+
+    // Deploy weighted-threshold-policy and install with:
+    // A=100, B=75, C=75, threshold=150.
+    // Removing A (weight 100) → remaining = 75+75 = 150 ≥ 150 → reachable.
+    let wtp_id = env.register(WeightedThresholdPolicy, ());
+    let mut signer_weights = Map::new(&env);
+    signer_weights.set(signer_a.clone(), 100u32);
+    signer_weights.set(signer_b.clone(), 75u32);
+    signer_weights.set(signer_c.clone(), 75u32);
+    let install_param: Val = WeightedThresholdAccountParams { signer_weights, threshold: 150 }
+        .into_val(&env);
+    client.add_policy(&0, &wtp_id, &install_param);
+
+    // Remove A (weight 100): remaining = 75+75 = 150 ≥ 150 → ok.
+    // Find signer A's ID in the context rule.
+    let rule = client.get_context_rule(&0);
+    let signer_a_id = rule.signer_ids.get(0).unwrap();
+    client.remove_signer(&0, &signer_a_id);
+
+    let rule = client.get_context_rule(&0);
+    assert_eq!(rule.signers.len(), 2);
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #1)")]
+fn remove_signer_unreachable_blocked_by_weighted_threshold_policy() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let signer_a = Signer::Delegated(Address::generate(&env));
+    let signer_b = Signer::Delegated(Address::generate(&env));
+    let signer_c = Signer::Delegated(Address::generate(&env));
+    let signers = vec![&env, signer_a.clone(), signer_b.clone(), signer_c.clone()];
+    let policies = Map::new(&env);
+    let (_account_id, client) = register_account(&env, &signers, &policies);
+
+    // A=100, B=75, C=75, threshold=150.
+    // Removing B (weight 75) → remaining = 100+75 = 175 ≥ 150 → reachable.
+    // But removing B AND C → 100 < 150 → unreachable.
+    // We test single removal: B removed → reachable, so let's use threshold=200
+    // to make any single removal unreachable.
+    let wtp_id = env.register(WeightedThresholdPolicy, ());
+    let mut signer_weights = Map::new(&env);
+    signer_weights.set(signer_a.clone(), 100u32);
+    signer_weights.set(signer_b.clone(), 75u32);
+    signer_weights.set(signer_c.clone(), 75u32);
+    let install_param: Val = WeightedThresholdAccountParams { signer_weights, threshold: 200 }
+        .into_val(&env);
+    client.add_policy(&0, &wtp_id, &install_param);
+
+    // Total weight = 250. Removing any single signer drops below 200.
+    // Remove B (weight 75): remaining = 100+75 = 175 < 200 → blocked.
+    let rule = client.get_context_rule(&0);
+    let signer_b_id = rule.signer_ids.get(1).unwrap();
+    client.remove_signer(&0, &signer_b_id);
 }

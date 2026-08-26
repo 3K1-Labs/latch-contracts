@@ -65,6 +65,7 @@ fn would_remain_reachable_true_when_remaining_weight_exceeds_threshold() {
             0,
             smart_account.clone(),
             signer_a.clone(),
+            2, // remaining signer count (unused by weighted policy)
         ));
     });
 }
@@ -82,11 +83,11 @@ fn would_remain_reachable_false_when_remaining_weight_below_threshold() {
     let signers = Vec::from_array(&e, [signer_a.clone(), signer_b.clone(), signer_c.clone()]);
     let context_rule = create_context_rule_with_signers(&e, signers);
 
-    // A=100, B=75, C=75, threshold=150
+    // A=100, B=75, C=75, threshold=200
     let params = make_weighted_install_params(
         &e,
         &[(signer_a.clone(), 100), (signer_b.clone(), 75), (signer_c.clone(), 75)],
-        150,
+        200,
     );
 
     e.mock_all_auths();
@@ -96,12 +97,13 @@ fn would_remain_reachable_false_when_remaining_weight_below_threshold() {
     });
 
     e.as_contract(&address, || {
-        // Remove A (weight 100): remaining = 75+75 = 150 >= 150 — reachable
-        assert!(WeightedThresholdPolicy::would_remain_reachable(
+        // Remove B (weight 75): remaining = 100+75 = 175 < 200 — NOT reachable
+        assert!(!WeightedThresholdPolicy::would_remain_reachable(
             &e,
             0,
             smart_account.clone(),
-            signer_a.clone(),
+            signer_b.clone(),
+            2, // remaining signer count (unused by weighted policy)
         ));
     });
 }
@@ -139,6 +141,7 @@ fn would_remain_reachable_true_when_weight_exceeds_threshold() {
             0,
             smart_account.clone(),
             signer_c.clone(),
+            2, // remaining signer count (unused by weighted policy)
         ));
     });
 }
@@ -173,6 +176,7 @@ fn would_remain_reachable_false_for_zero_weight_unconfigured_signer() {
             0,
             smart_account.clone(),
             unconfigured,
+            2, // remaining signer count (unused by weighted policy)
         ));
     });
 }

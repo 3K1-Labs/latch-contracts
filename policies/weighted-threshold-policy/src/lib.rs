@@ -50,8 +50,6 @@
 
 use soroban_sdk::{auth::Context, contract, contractimpl, Address, Env, Map, Vec};
 
-#[cfg(test)]
-mod test;
 use stellar_accounts::{
     policies::{weighted_threshold, weighted_threshold::WeightedThresholdAccountParams, Policy},
     smart_account::{ContextRule, ContextRuleType, Signer},
@@ -146,11 +144,14 @@ impl WeightedThresholdPolicy {
     /// * `context_rule_id` - The context rule ID for this policy.
     /// * `smart_account` - The address of the smart account.
     /// * `signer_to_remove` - The signer whose weight would be subtracted.
+    /// * `_remaining_signer_count` - Unused; included for interface
+    ///   compatibility with `threshold-policy`.
     pub fn would_remain_reachable(
         e: &Env,
         context_rule_id: u32,
         smart_account: Address,
         signer_to_remove: Signer,
+        _remaining_signer_count: u32,
     ) -> bool {
         let threshold = weighted_threshold::get_threshold(e, context_rule_id, &smart_account);
         let signer_weights = weighted_threshold::get_signer_weights(
@@ -178,3 +179,6 @@ impl WeightedThresholdPolicy {
         remaining_weight >= threshold
     }
 }
+
+#[cfg(test)]
+mod test;
