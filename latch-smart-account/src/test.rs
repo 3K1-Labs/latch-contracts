@@ -125,6 +125,40 @@ fn execute_requires_self_auth() {
     client.execute(&target_id, &Symbol::new(&env, "set"), &vec![&env, 1u32.into_val(&env)]);
 }
 
+// ################## PROPOSE TESTS ##################
+
+#[test]
+fn propose_triggers_auth_without_executing() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let signers = default_signers(&env);
+    let policies = Map::new(&env);
+    let (_account_id, client) = register_account(&env, &signers, &policies);
+
+    let target_id = env.register(MockTargetContract, ());
+    let target_client = MockTargetContractClient::new(&env, &target_id);
+
+    // propose() triggers auth but should NOT execute the target.
+    client.propose(&target_id, &Symbol::new(&env, "set"), &vec![&env, 42u32.into_val(&env)]);
+
+    // Target should remain at default (0) — propose doesn't invoke.
+    assert_eq!(target_client.get(), 0);
+}
+
+#[test]
+#[should_panic]
+fn propose_requires_self_auth() {
+    let env = Env::default();
+
+    let signers = default_signers(&env);
+    let policies = Map::new(&env);
+    let (_account_id, client) = register_account(&env, &signers, &policies);
+
+    let target_id = env.register(MockTargetContract, ());
+    client.propose(&target_id, &Symbol::new(&env, "set"), &vec![&env, 1u32.into_val(&env)]);
+}
+
 #[test]
 fn add_context_rule_succeeds_with_self_auth() {
     let env = Env::default();
