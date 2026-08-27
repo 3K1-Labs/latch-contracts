@@ -1,11 +1,8 @@
 # Secp256k1 Verifier Spec
 
-> **Status: Not started, but no longer blocked.** `ed25519-verifier` and `webauthn-verifier` are
-> both shipped — the sequencing that deferred this one no longer applies. This spec now includes
-> concrete recommendations, not just open questions, for whoever picks it up. The stub crate that
-> previously existed (`secp256k1-verifier`) has been deleted from the repo — start fresh from this
-> spec, matching the structure of `ed25519-verifier` (see that crate's source for the pattern: a
-> thin `#[contract]` wrapper, `Verifier` trait impl, `src/test.rs` with adversarial negative tests).
+> **Status: Not started, not blocked.** Build fresh from this spec, matching the structure of
+> `ed25519-verifier` (see that crate's source for the pattern: a thin `#[contract]` wrapper,
+> `Verifier` trait impl, `src/test.rs` with adversarial negative tests).
 
 ## What this verifier is for
 
@@ -15,28 +12,15 @@ signature over the standard 32-byte Soroban auth payload hash, same as any other
 repo. It is **not** specific to MetaMask, EIP-191, or any particular wallet's signing popup — it's
 a curve-level verifier, exactly the same relationship `ed25519-verifier` has to the Ed25519 curve.
 
-## Not currently wired to the factory
-
-Earlier revisions of this spec assumed the factory would install this verifier automatically
-(`SignerKind::Secp256k1`). That's no longer true — `Secp256k1` was removed from the factory's
-`SignerKind` entirely (it was unused: confirmed via both `latch-web-extension` and `latch-mobile`
-audits). Building this verifier is now purely standalone infrastructure, usable by any smart
-account via `Signer::External(verifier_address, key_data)` regardless of what the factory's
-convenience enum supports. Re-adding a factory-level `SignerKind` for it, if ever wanted, is a
-separate, later decision — don't couple this implementation to it.
-
 ---
 
-## Open Architecture Questions — with recommendations
+## Architecture Decisions
 
-These still need a maintainer to confirm before implementation starts, but each now has a default
-recommendation instead of being left fully open.
+### 1. Signing convention — raw hash, no wrapping (decided)
 
-### 1. Signing convention — recommend the raw hash, no wrapping
-
-**Recommendation: sign the raw 32-byte auth payload hash directly**, the same convention
-`ed25519-verifier` uses. Nothing about the secp256k1 curve or ECDSA itself requires a message
-wrapper — that's not a cryptographic property of the curve.
+Sign the raw 32-byte auth payload hash directly, the same convention `ed25519-verifier` uses.
+Nothing about the secp256k1 curve or ECDSA itself requires a message wrapper — that's not a
+cryptographic property of the curve.
 
 Don't build in an EIP-191 (`"\x19Ethereum Signed Message:\n" + len + message`) wrapper by default.
 That convention only matters if a client is specifically going through a wallet's `personal_sign`
@@ -62,20 +46,35 @@ The verifier must derive `recovered_pub_key` and compare it against the register
 Confirm what encoding the client-side signing library actually produces for `recovery_id` (raw 0/1
 is the ECDSA-native form; some libraries offset it) before locking the format.
 
-### 3. Key data format — recommend keeping the 65-byte uncompressed pubkey
+**Why recover-and-compare is real verification, not a weaker substitute.** ECDSA's `(r, s)`
+signature mathematically under-determines the public key on its own — there are exactly two curve
+points that could have produced a given `r`, and `recovery_id` is the extra bit that picks which
+one. Given `(hash, r, s, recovery_id)` alone, recovery reconstructs one specific candidate public
+key with no pubkey input needed at all — a structural property of ECDSA, not a Soroban limitation.
+Comparing that candidate against the registered `key_data` is mathematically equivalent to a direct
+`verify(pubkey, hash, sig) -> bool`: an attacker who doesn't hold the private key for `key_data`
+cannot construct any `(r, s, recovery_id)` that recovers to *that specific* key without solving the
+discrete log problem, i.e. breaking ECDSA itself. This isn't a Soroban-specific workaround either —
+it's exactly how Ethereum's `ecrecover` precompile works; EVM tooling has never had a separate
+ECDSA verify function, everything goes through recover-and-compare.
 
-Two options:
+Ed25519 needs a real `verify()` for the opposite structural reason: Ed25519 signatures don't
+support public-key recovery at all — the scheme's construction doesn't leave enough information in
+`(R, s)` alone to reconstruct the signer's key, so the pubkey has to be supplied and checked
+directly. That's a difference between the two signature schemes, not an inconsistency between this
+verifier and `ed25519-verifier`.
 
-- **65-byte uncompressed pubkey** (`0x04` + 32-byte X + 32-byte Y) as `key_data`.
-- **20-byte Ethereum-style address** (`keccak256(pubkey)[12:]`), recovering the pubkey then
-  re-deriving and comparing the address instead.
+### 3. Key data format — 65-byte uncompressed pubkey (decided)
 
-**Recommendation: keep the 65-byte uncompressed pubkey.** Every other verifier in this repo
-(`ed25519-verifier`, `webauthn-verifier`) stores and canonicalizes the actual public key material,
-not a derived hash/address — switching this one verifier to an
-address-based model breaks that symmetry for no real benefit, and throws away key material a future
-scheme (aggregate signatures, cross-verifier dedup) might want. Deriving a familiar `0x...` address
-for display purposes belongs in the client/SDK layer, not the on-chain `key_data` representation.
+Considered and rejected: a 20-byte Ethereum-style address (`keccak256(pubkey)[12:]`), recovering
+the pubkey then re-deriving and comparing the address instead. Rejected because every other
+verifier in this repo (`ed25519-verifier`, `webauthn-verifier`) stores and canonicalizes the actual
+public key material, not a derived hash/address — an address-based model for just this one verifier
+breaks that symmetry for no real benefit, and throws away key material a future scheme (aggregate
+signatures, cross-verifier dedup) might want. Deriving a familiar `0x...` address for display
+purposes belongs in the client/SDK layer, not the on-chain `key_data` representation.
+
+Decided: **65-byte uncompressed pubkey** (`0x04` + 32-byte X + 32-byte Y) as `key_data`.
 
 ### 4. Reference implementation — none exists
 
@@ -156,7 +155,7 @@ now.
 
 ## What This Is Not
 
-- Not wired into the factory. See "Not currently wired to the factory" above.
+- Not wired into the factory.
 - Not a MetaMask-specific verifier. It verifies secp256k1 signatures over the raw hash — the same
   curve MetaMask and other EVM wallets happen to use, not an integration with any particular
   wallet's signing flow. A wallet-popup-constrained variant, if one turns out to be needed, is a
