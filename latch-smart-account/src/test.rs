@@ -11,7 +11,10 @@ use soroban_sdk::{
 };
 use spending_limit_policy::SpendingLimitPolicy;
 use stellar_accounts::{
-    policies::{spending_limit::SpendingLimitAccountParams, Policy},
+    policies::{
+        simple_threshold::SimpleThresholdAccountParams, spending_limit::SpendingLimitAccountParams,
+        Policy,
+    },
     smart_account::{self as smart_account, AuthPayload, ContextRuleType, Signer},
 };
 
@@ -208,7 +211,9 @@ fn add_signer_and_policy_succeed_with_self_auth() {
 
     let default_rule = client.get_context_rule(&0);
     let new_signer = Signer::Delegated(Address::generate(&env));
-    let signer_id = client.add_signer(&default_rule.id, &new_signer);
+    // add_signer (singular) is disabled — batch_add_signer is the only
+    // addition path, and it requires confirm_threshold_unchanged.
+    client.batch_add_signer(&default_rule.id, &vec![&env, new_signer.clone()], &true);
 
     let policy_id = env.register(MockPolicyContract, ());
     let install_param: Val = Val::from_void().into();
@@ -216,6 +221,7 @@ fn add_signer_and_policy_succeed_with_self_auth() {
 
     let updated_rule = client.get_context_rule(&default_rule.id);
     assert!(updated_rule.signers.contains(&new_signer));
+    let signer_id = updated_rule.signer_ids.get(updated_rule.signer_ids.len() - 1).unwrap();
     assert_eq!(signer_id, 1);
     assert_eq!(added_policy_id, 0);
     assert!(updated_rule.policies.contains(&policy_id));
@@ -223,7 +229,7 @@ fn add_signer_and_policy_succeed_with_self_auth() {
 
 #[test]
 #[should_panic]
-fn add_signer_requires_self_auth() {
+fn batch_add_signer_requires_self_auth() {
     let env = Env::default();
 
     let signers = default_signers(&env);
@@ -231,6 +237,25 @@ fn add_signer_requires_self_auth() {
     let (_account_id, client) = register_account(&env, &signers, &policies);
 
     let default_rule = client.get_context_rule(&0);
+    let new_signer = Signer::Delegated(Address::generate(&env));
+    client.batch_add_signer(&default_rule.id, &vec![&env, new_signer], &true);
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #3)")]
+fn add_signer_singular_is_disabled() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let signers = default_signers(&env);
+    let policies = Map::new(&env);
+    let (_account_id, client) = register_account(&env, &signers, &policies);
+
+    let default_rule = client.get_context_rule(&0);
+    // The inherited SmartAccount::add_signer default has no way to require
+    // confirm_threshold_unchanged, so it's overridden to always panic with
+    // LatchSmartAccountError::SingleSignerAdditionDisabled (#3) — verifies
+    // the batch_add_signer bypass this used to allow is actually closed.
     client.add_signer(&default_rule.id, &Signer::Delegated(Address::generate(&env)));
 }
 
@@ -533,4 +558,263 @@ fn session_plus_spending_limit_disallowed_method_rejected_even_when_under_limit(
     env.as_contract(&account_id, || {
         let _ = smart_account::do_check_auth(&env, &payload_hash, &signatures, &auth_contexts);
     });
+}
+
+// ################## REMOVE_SIGNER TESTS ##################
+//
+// These tests exercise the `remove_signer` override on
+// `LatchSmartAccount`, which probes attached policies via
+// `try_invoke_contract` before delegating to OZ's `storage::remove_signer`.
+// The threshold-policy and weighted-threshold-policy both implement
+// `would_remain_reachable`; non-threshold policies are skipped.
+
+use stellar_accounts::policies::weighted_threshold::WeightedThresholdAccountParams;
+use weighted_threshold_policy::WeightedThresholdPolicy;
+
+/// Sets up a smart account with N signers and a threshold-policy installed
+/// at the given threshold, returning the account and client.
+fn setup_with_threshold(
+    env: &Env,
+    signer_count: u32,
+    threshold: u32,
+) -> (Address, LatchSmartAccountClient<'_>) {
+    env.mock_all_auths();
+
+    let mut signers = Vec::new(env);
+    for _ in 0..signer_count {
+        signers.push_back(Signer::Delegated(Address::generate(env)));
+    }
+    let policies = Map::new(env);
+    let (account_id, client) = register_account(env, &signers, &policies);
+
+    let threshold_policy_id = env.register(threshold_policy::ThresholdPolicy, ());
+    let install_param: Val = SimpleThresholdAccountParams { threshold }.into_val(env);
+    client.add_policy(&0, &threshold_policy_id, &install_param);
+
+    (account_id, client)
+}
+
+#[test]
+fn remove_signer_succeeds_when_reachable() {
+    let env = Env::default();
+    // 3 signers, threshold=2. Remove one → 2 remaining ≥ 2 → ok.
+    let (_account_id, client) = setup_with_threshold(&env, 3, 2);
+
+    env.mock_all_auths();
+    client.remove_signer(&0, &0);
+
+    let rule = client.get_context_rule(&0);
+    assert_eq!(rule.signers.len(), 2);
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #1)")]
+fn remove_signer_panics_when_unreachable() {
+    let env = Env::default();
+    // 3 signers, threshold=3. Remove one → 2 remaining < 3 → blocked.
+    let (_account_id, client) = setup_with_threshold(&env, 3, 3);
+
+    env.mock_all_auths();
+    client.remove_signer(&0, &0);
+}
+
+#[test]
+fn remove_signer_succeeds_with_non_threshold_policy() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let signers = default_signers(&env);
+    let policies = Map::new(&env);
+    let (_account_id, client) = register_account(&env, &signers, &policies);
+
+    // Attach MockPolicyContract — does not implement would_remain_reachable,
+    // so the probe is skipped ("no opinion").
+    let mock_policy_id = env.register(MockPolicyContract, ());
+    let install_param: Val = Val::from_void().into();
+    client.add_policy(&0, &mock_policy_id, &install_param);
+
+    // The default rule has 1 signer. remove_signer should work
+    // because the mock policy doesn't object.
+    client.remove_signer(&0, &0);
+
+    let rule = client.get_context_rule(&0);
+    assert_eq!(rule.signers.len(), 0);
+    // Last signer removed but a policy remains — allowed by OZ.
+}
+
+#[test]
+#[should_panic]
+fn remove_signer_requires_self_auth() {
+    let env = Env::default();
+    // No mock_all_auths — auth should fail.
+    let signers = default_signers(&env);
+    let policies = Map::new(&env);
+    let (_account_id, client) = register_account(&env, &signers, &policies);
+
+    client.remove_signer(&0, &0);
+}
+
+#[test]
+fn remove_signer_blocked_by_weighted_threshold_policy() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let signer_a = Signer::Delegated(Address::generate(&env));
+    let signer_b = Signer::Delegated(Address::generate(&env));
+    let signer_c = Signer::Delegated(Address::generate(&env));
+    let signers = vec![&env, signer_a.clone(), signer_b.clone(), signer_c.clone()];
+    let policies = Map::new(&env);
+    let (_account_id, client) = register_account(&env, &signers, &policies);
+
+    // Deploy weighted-threshold-policy and install with:
+    // A=100, B=75, C=75, threshold=150.
+    // Removing A (weight 100) → remaining = 75+75 = 150 ≥ 150 → reachable.
+    let wtp_id = env.register(WeightedThresholdPolicy, ());
+    let mut signer_weights = Map::new(&env);
+    signer_weights.set(signer_a.clone(), 100u32);
+    signer_weights.set(signer_b.clone(), 75u32);
+    signer_weights.set(signer_c.clone(), 75u32);
+    let install_param: Val =
+        WeightedThresholdAccountParams { signer_weights, threshold: 150 }.into_val(&env);
+    client.add_policy(&0, &wtp_id, &install_param);
+
+    // Remove A (weight 100): remaining = 75+75 = 150 ≥ 150 → ok.
+    // Find signer A's ID in the context rule.
+    let rule = client.get_context_rule(&0);
+    let signer_a_id = rule.signer_ids.get(0).unwrap();
+    client.remove_signer(&0, &signer_a_id);
+
+    let rule = client.get_context_rule(&0);
+    assert_eq!(rule.signers.len(), 2);
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #1)")]
+fn remove_signer_unreachable_blocked_by_weighted_threshold_policy() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let signer_a = Signer::Delegated(Address::generate(&env));
+    let signer_b = Signer::Delegated(Address::generate(&env));
+    let signer_c = Signer::Delegated(Address::generate(&env));
+    let signers = vec![&env, signer_a.clone(), signer_b.clone(), signer_c.clone()];
+    let policies = Map::new(&env);
+    let (_account_id, client) = register_account(&env, &signers, &policies);
+
+    // A=100, B=75, C=75, threshold=150.
+    // Removing B (weight 75) → remaining = 100+75 = 175 ≥ 150 → reachable.
+    // But removing B AND C → 100 < 150 → unreachable.
+    // We test single removal: B removed → reachable, so let's use threshold=200
+    // to make any single removal unreachable.
+    let wtp_id = env.register(WeightedThresholdPolicy, ());
+    let mut signer_weights = Map::new(&env);
+    signer_weights.set(signer_a.clone(), 100u32);
+    signer_weights.set(signer_b.clone(), 75u32);
+    signer_weights.set(signer_c.clone(), 75u32);
+    let install_param: Val =
+        WeightedThresholdAccountParams { signer_weights, threshold: 200 }.into_val(&env);
+    client.add_policy(&0, &wtp_id, &install_param);
+
+    // Total weight = 250. Removing any single signer drops below 200.
+    // Remove B (weight 75): remaining = 100+75 = 175 < 200 → blocked.
+    let rule = client.get_context_rule(&0);
+    let signer_b_id = rule.signer_ids.get(1).unwrap();
+    client.remove_signer(&0, &signer_b_id);
+}
+
+// ################## BATCH_ADD_SIGNER TESTS ##################
+//
+// These tests exercise the `batch_add_signer` override with the
+// `confirm_threshold_unchanged` parameter, which probes attached
+// policies after adding signers and reverts if any policy objects and
+// acknowledgment was not given.
+
+#[test]
+fn batch_add_signer_succeeds_with_acknowledgment() {
+    let env = Env::default();
+    // 3 signers, threshold=3. Adding a 4th → 4-of-3 ratio (weaker).
+    let (_account_id, client) = setup_with_threshold(&env, 3, 3);
+
+    let new_signer = Signer::Delegated(Address::generate(&env));
+    env.mock_all_auths();
+    // confirm_threshold_unchanged = true → proceeds despite weakening.
+    client.batch_add_signer(&0, &vec![&env, new_signer.clone()], &true);
+
+    let rule = client.get_context_rule(&0);
+    assert_eq!(rule.signers.len(), 4);
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #2)")]
+fn batch_add_signer_reverts_without_acknowledgment_when_policy_objects() {
+    let env = Env::default();
+    // 3 signers, threshold=3. Adding a 4th would weaken to 4-of-3.
+    let (_account_id, client) = setup_with_threshold(&env, 3, 3);
+
+    let new_signer = Signer::Delegated(Address::generate(&env));
+    env.mock_all_auths();
+    // confirm_threshold_unchanged = false → reverts.
+    client.batch_add_signer(&0, &vec![&env, new_signer], &false);
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #2)")]
+fn batch_add_signer_reverts_when_ack_false_regardless_of_policies() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let signers = default_signers(&env);
+    let policies = Map::new(&env);
+    let (_account_id, client) = register_account(&env, &signers, &policies);
+
+    // Attach MockPolicyContract — does not implement would_remain_reachable.
+    let mock_policy_id = env.register(MockPolicyContract, ());
+    let install_param: Val = Val::from_void().into();
+    client.add_policy(&0, &mock_policy_id, &install_param);
+
+    let new_signer = Signer::Delegated(Address::generate(&env));
+    // confirm_threshold_unchanged = false always reverts, even without a
+    // threshold policy.
+    client.batch_add_signer(&0, &vec![&env, new_signer], &false);
+}
+
+#[test]
+fn batch_add_signer_succeeds_without_threshold_policy_when_ack_true() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let signers = default_signers(&env);
+    let policies = Map::new(&env);
+    let (_account_id, client) = register_account(&env, &signers, &policies);
+
+    // Attach MockPolicyContract — does not implement would_remain_reachable,
+    // so the probe is skipped ("no opinion").
+    let mock_policy_id = env.register(MockPolicyContract, ());
+    let install_param: Val = Val::from_void().into();
+    client.add_policy(&0, &mock_policy_id, &install_param);
+
+    let new_signer = Signer::Delegated(Address::generate(&env));
+    // confirm_threshold_unchanged = false always reverts, regardless of
+    // policies. Use confirm_threshold_unchanged = true to succeed.
+    client.batch_add_signer(&0, &vec![&env, new_signer], &true);
+
+    let rule = client.get_context_rule(&0);
+    assert_eq!(rule.signers.len(), 2);
+}
+
+#[test]
+fn batch_add_signer_succeeds_when_reachable_with_acknowledgment() {
+    let env = Env::default();
+    // 3 signers, threshold=2. Adding a 4th → 4-of-2 ratio (weaker but still
+    // reachable).
+    let (_account_id, client) = setup_with_threshold(&env, 3, 2);
+
+    let new_signer = Signer::Delegated(Address::generate(&env));
+    env.mock_all_auths();
+    // Even though threshold-policy returns true (2 ≤ 4), we still need
+    // acknowledgment because the ratio changed.
+    client.batch_add_signer(&0, &vec![&env, new_signer], &true);
+
+    let rule = client.get_context_rule(&0);
+    assert_eq!(rule.signers.len(), 4);
 }

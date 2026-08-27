@@ -1574,6 +1574,8 @@ dependencies = [
  "spending-limit-policy",
  "stellar-accounts",
  "stellar-contract-utils",
+ "threshold-policy",
+ "weighted-threshold-policy",
 ]
 
 [[package]]
