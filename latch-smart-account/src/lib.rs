@@ -26,7 +26,7 @@ pub enum LatchSmartAccountError {
     SignerRemovedWouldBreakPolicy = 1,
     /// Adding the signer would weaken the policy's threshold ratio (e.g.
     /// 3-of-3 becomes 3-of-5) and the caller did not explicitly
-    /// acknowledge this via `ack_threshold`.
+    /// acknowledge this via `ack_threshold_unchanged`.
     SignerAddedWouldWeakenPolicy = 2,
 }
 
@@ -50,26 +50,27 @@ impl LatchSmartAccount {
     ///
     /// Requires the caller to explicitly acknowledge that adding signers
     /// may weaken the existing threshold ratio (e.g. a 3-of-3 becoming
-    /// 3-of-5). Setting `ack_threshold = false` always reverts — this
-    /// forces the caller to consciously accept the ratio change.
+    /// 3-of-5). Setting `ack_threshold_unchanged = false` always
+    /// reverts — this forces the caller to consciously accept the ratio
+    /// change.
     ///
     /// # Arguments
     ///
     /// * `e` - Access to the Soroban environment.
     /// * `context_rule_id` - The ID of the context rule to modify.
     /// * `signers` - The signers to add.
-    /// * `ack_threshold` - Must be `true` for the addition to proceed. If
-    ///   `false`, the operation reverts with
+    /// * `ack_threshold_unchanged` - Must be `true` for the addition to
+    ///   proceed. If `false`, the operation reverts with
     ///   [`LatchSmartAccountError::SignerAddedWouldWeakenPolicy`].
     pub fn batch_add_signer(
         e: &Env,
         context_rule_id: u32,
         signers: Vec<Signer>,
-        ack_threshold: bool,
+        ack_threshold_unchanged: bool,
     ) {
         e.current_contract_address().require_auth();
 
-        if !ack_threshold {
+        if !ack_threshold_unchanged {
             panic_with_error!(e, LatchSmartAccountError::SignerAddedWouldWeakenPolicy);
         }
 

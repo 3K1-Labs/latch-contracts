@@ -669,7 +669,7 @@ fn remove_signer_unreachable_blocked_by_weighted_threshold_policy() {
 // ################## BATCH_ADD_SIGNER TESTS ##################
 //
 // These tests exercise the `batch_add_signer` override with the
-// `acknowledge_threshold_unchanged` parameter, which probes attached
+// `ack_threshold_unchanged` parameter, which probes attached
 // policies after adding signers and reverts if any policy objects and
 // acknowledgment was not given.
 
@@ -681,7 +681,7 @@ fn batch_add_signer_succeeds_with_acknowledgment() {
 
     let new_signer = Signer::Delegated(Address::generate(&env));
     env.mock_all_auths();
-    // ack_threshold = true → proceeds despite weakening.
+    // ack_threshold_unchanged = true → proceeds despite weakening.
     client.batch_add_signer(&0, &vec![&env, new_signer.clone()], &true);
 
     let rule = client.get_context_rule(&0);
@@ -697,7 +697,7 @@ fn batch_add_signer_reverts_without_acknowledgment_when_policy_objects() {
 
     let new_signer = Signer::Delegated(Address::generate(&env));
     env.mock_all_auths();
-    // ack_threshold = false → reverts.
+    // ack_threshold_unchanged = false → reverts.
     client.batch_add_signer(&0, &vec![&env, new_signer], &false);
 }
 
@@ -717,7 +717,8 @@ fn batch_add_signer_reverts_when_ack_false_regardless_of_policies() {
     client.add_policy(&0, &mock_policy_id, &install_param);
 
     let new_signer = Signer::Delegated(Address::generate(&env));
-    // ack_threshold = false always reverts, even without a threshold policy.
+    // ack_threshold_unchanged = false always reverts, even without a
+    // threshold policy.
     client.batch_add_signer(&0, &vec![&env, new_signer], &false);
 }
 
@@ -737,8 +738,8 @@ fn batch_add_signer_succeeds_without_threshold_policy_when_ack_true() {
     client.add_policy(&0, &mock_policy_id, &install_param);
 
     let new_signer = Signer::Delegated(Address::generate(&env));
-    // ack_threshold = false always reverts, regardless of policies.
-    // Use ack_threshold = true to succeed.
+    // ack_threshold_unchanged = false always reverts, regardless of
+    // policies. Use ack_threshold_unchanged = true to succeed.
     client.batch_add_signer(&0, &vec![&env, new_signer], &true);
 
     let rule = client.get_context_rule(&0);
