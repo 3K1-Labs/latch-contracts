@@ -5,7 +5,7 @@
 
 use soroban_sdk::{
     auth::{Context, ContractContext},
-    contracterror, contractevent, contracttype, panic_with_error, Address, Env, Map, Symbol, Vec, TryIntoVal,
+    contracterror, contractevent, contracttype, panic_with_error, Address, Env, Map, Symbol, TryIntoVal, Vec,
 };
 use stellar_accounts::smart_account::{ContextRule, ContextRuleType, Signer};
 
@@ -28,6 +28,8 @@ pub enum ExpectedValue {
     I32(i32),
     U64(u64),
     I64(i64),
+    U128(u128),
+    I128(i128),
     Sym(Symbol),
     Addr(Address),
 }
@@ -96,28 +98,47 @@ pub enum ParameterScopedStorageKey {
 }
 
 const DAY_IN_LEDGERS: u32 = 17280;
-pub const SESSION_EXTEND_AMOUNT: u32 = 30 * DAY_IN_LEDGERS;
-pub const SESSION_TTL_THRESHOLD: u32 = SESSION_EXTEND_AMOUNT - DAY_IN_LEDGERS;
+pub const PARAMETER_SCOPED_EXTEND_AMOUNT: u32 = 30 * DAY_IN_LEDGERS;
+pub const PARAMETER_SCOPED_TTL_THRESHOLD: u32 = PARAMETER_SCOPED_EXTEND_AMOUNT - DAY_IN_LEDGERS;
 pub const MAX_FNS: u32 = 10;
 pub const MAX_CONDITIONS_PER_FN: u32 = 5;
 
 pub fn emit_conditions_enforced(e: &Env, smart_account: Address, context_rule_id: u32, fn_name: Symbol) {
-    ConditionsEnforced { smart_account, context_rule_id, fn_name }.publish(e);
+    ConditionsEnforced {
+        smart_account,
+        context_rule_id,
+        fn_name,
+    }
+    .publish(e);
 }
 
 pub fn emit_conditions_installed(e: &Env, smart_account: Address, context_rule_id: u32) {
-    ConditionsInstalled { smart_account, context_rule_id }.publish(e);
+    ConditionsInstalled {
+        smart_account,
+        context_rule_id,
+    }
+    .publish(e);
 }
 
 pub fn emit_conditions_uninstalled(e: &Env, smart_account: Address, context_rule_id: u32) {
-    ConditionsUninstalled { smart_account, context_rule_id }.publish(e);
+    ConditionsUninstalled {
+        smart_account,
+        context_rule_id,
+    }
+    .publish(e);
 }
 
 pub fn get_conditions(e: &Env, context_rule_id: u32, smart_account: &Address) -> Map<Symbol, Vec<Condition>> {
     let key = ParameterScopedStorageKey::AccountContext(smart_account.clone(), context_rule_id);
-    e.storage().persistent().get::<_, ParameterScopedData>(&key)
+    e.storage()
+        .persistent()
+        .get::<_, ParameterScopedData>(&key)
         .inspect(|_| {
-            e.storage().persistent().extend_ttl(&key, SESSION_TTL_THRESHOLD, SESSION_EXTEND_AMOUNT);
+            e.storage().persistent().extend_ttl(
+                &key,
+                PARAMETER_SCOPED_TTL_THRESHOLD,
+                PARAMETER_SCOPED_EXTEND_AMOUNT,
+            );
         })
         .map(|data| data.conditions)
         .unwrap_or_else(|| panic_with_error!(e, ParameterScopedError::SmartAccountNotInstalled))
@@ -140,11 +161,13 @@ pub fn enforce(
 
     match context {
         Context::Contract(ContractContext { fn_name, args, .. }) => {
-            let fn_conditions = configured_fns.get(fn_name.clone())
+            let fn_conditions = configured_fns
+                .get(fn_name.clone())
                 .unwrap_or_else(|| panic_with_error!(e, ParameterScopedError::MethodNotAllowed));
 
             for cond in fn_conditions.into_iter() {
-                let actual_arg = args.get(cond.arg_index)
+                let actual_arg = args
+                    .get(cond.arg_index)
                     .unwrap_or_else(|| panic_with_error!(e, ParameterScopedError::ArgumentIndexOutOfBounds));
 
                 let passed = match &cond.expected_value {
@@ -159,8 +182,10 @@ pub fn enforce(
                                 Operator::Lt => actual < *expected,
                                 Operator::Lte => actual <= *expected,
                             }
-                        } else { false }
-                    },
+                        } else {
+                            false
+                        }
+                    }
                     ExpectedValue::I32(expected) => {
                         if let Ok(actual) = actual_arg.try_into_val(e) {
                             let actual: i32 = actual;
@@ -172,8 +197,10 @@ pub fn enforce(
                                 Operator::Lt => actual < *expected,
                                 Operator::Lte => actual <= *expected,
                             }
-                        } else { false }
-                    },
+                        } else {
+                            false
+                        }
+                    }
                     ExpectedValue::U64(expected) => {
                         if let Ok(actual) = actual_arg.try_into_val(e) {
                             let actual: u64 = actual;
@@ -185,8 +212,10 @@ pub fn enforce(
                                 Operator::Lt => actual < *expected,
                                 Operator::Lte => actual <= *expected,
                             }
-                        } else { false }
-                    },
+                        } else {
+                            false
+                        }
+                    }
                     ExpectedValue::I64(expected) => {
                         if let Ok(actual) = actual_arg.try_into_val(e) {
                             let actual: i64 = actual;
@@ -198,8 +227,40 @@ pub fn enforce(
                                 Operator::Lt => actual < *expected,
                                 Operator::Lte => actual <= *expected,
                             }
-                        } else { false }
-                    },
+                        } else {
+                            false
+                        }
+                    }
+                    ExpectedValue::U128(expected) => {
+                        if let Ok(actual) = actual_arg.try_into_val(e) {
+                            let actual: u128 = actual;
+                            match cond.operator {
+                                Operator::Eq => actual == *expected,
+                                Operator::Neq => actual != *expected,
+                                Operator::Gt => actual > *expected,
+                                Operator::Gte => actual >= *expected,
+                                Operator::Lt => actual < *expected,
+                                Operator::Lte => actual <= *expected,
+                            }
+                        } else {
+                            false
+                        }
+                    }
+                    ExpectedValue::I128(expected) => {
+                        if let Ok(actual) = actual_arg.try_into_val(e) {
+                            let actual: i128 = actual;
+                            match cond.operator {
+                                Operator::Eq => actual == *expected,
+                                Operator::Neq => actual != *expected,
+                                Operator::Gt => actual > *expected,
+                                Operator::Gte => actual >= *expected,
+                                Operator::Lt => actual < *expected,
+                                Operator::Lte => actual <= *expected,
+                            }
+                        } else {
+                            false
+                        }
+                    }
                     ExpectedValue::Sym(expected) => {
                         if let Ok(actual) = actual_arg.try_into_val(e) {
                             let actual: Symbol = actual;
@@ -208,8 +269,10 @@ pub fn enforce(
                                 Operator::Neq => actual != *expected,
                                 _ => false,
                             }
-                        } else { false }
-                    },
+                        } else {
+                            false
+                        }
+                    }
                     ExpectedValue::Addr(expected) => {
                         if let Ok(actual) = actual_arg.try_into_val(e) {
                             let actual: Address = actual;
@@ -218,8 +281,10 @@ pub fn enforce(
                                 Operator::Neq => actual != *expected,
                                 _ => false,
                             }
-                        } else { false }
-                    },
+                        } else {
+                            false
+                        }
+                    }
                 };
 
                 if !passed {
@@ -232,7 +297,12 @@ pub fn enforce(
     }
 }
 
-pub fn install(e: &Env, params: &ParameterScopedAccountParams, context_rule: &ContextRule, smart_account: &Address) {
+pub fn install(
+    e: &Env,
+    params: &ParameterScopedAccountParams,
+    context_rule: &ContextRule,
+    smart_account: &Address,
+) {
     smart_account.require_auth();
 
     if !matches!(context_rule.context_type, ContextRuleType::CallContract(_)) {
@@ -247,6 +317,18 @@ pub fn install(e: &Env, params: &ParameterScopedAccountParams, context_rule: &Co
         if fn_conditions.is_empty() || fn_conditions.len() > MAX_CONDITIONS_PER_FN {
             panic_with_error!(e, ParameterScopedError::InvalidConditions)
         }
+
+        // Validate operator compatibility
+        for cond in fn_conditions.iter() {
+            match cond.expected_value {
+                ExpectedValue::Sym(_) | ExpectedValue::Addr(_) => {
+                    if cond.operator != Operator::Eq && cond.operator != Operator::Neq {
+                        panic_with_error!(e, ParameterScopedError::InvalidConditions)
+                    }
+                }
+                _ => {}
+            }
+        }
     }
 
     let key = ParameterScopedStorageKey::AccountContext(smart_account.clone(), context_rule.id);
@@ -254,7 +336,9 @@ pub fn install(e: &Env, params: &ParameterScopedAccountParams, context_rule: &Co
         panic_with_error!(e, ParameterScopedError::AlreadyInstalled)
     }
 
-    let data = ParameterScopedData { conditions: params.conditions.clone() };
+    let data = ParameterScopedData {
+        conditions: params.conditions.clone(),
+    };
     e.storage().persistent().set(&key, &data);
     emit_conditions_installed(e, smart_account.clone(), context_rule.id);
 }
