@@ -1,0 +1,21 @@
+[package]
+name = "p256-verifier"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.70"
+license = "Apache-2.0"
+publish = false
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[features]
+default = []
+testutils = ["soroban-sdk/testutils"]
+
+[dependencies]
+soroban-sdk = { workspace = true }
+stellar-accounts = { path = "../../stellar-accounts" }
+
+[dev-dependencies]
+soroban-sdk = { workspace = true, features = ["testutils"] }
