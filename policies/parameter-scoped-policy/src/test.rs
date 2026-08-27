@@ -1,13 +1,14 @@
 #![cfg(test)]
 extern crate std;
 
-use super::*;
 use soroban_sdk::{
     auth::{Context, ContractContext},
     testutils::Address as _,
     Address, Env, IntoVal, Map, String, Symbol, Vec,
 };
 use stellar_accounts::smart_account::{ContextRule, ContextRuleType, Signer};
+
+use super::*;
 
 fn setup() -> (Env, Address, u32, Address, Address) {
     let e = Env::default();
