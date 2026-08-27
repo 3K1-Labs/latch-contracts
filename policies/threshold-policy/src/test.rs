@@ -39,9 +39,10 @@ fn would_remain_reachable_true_when_remaining_equals_threshold() {
         super::simple_threshold::install(&e, &params, &context_rule, &smart_account);
     });
 
-    // The context rule has 3 signers. Removing any one leaves 2 < 3 → NOT reachable.
-    // But threshold=3 with 3 signers → removing one → 2 remaining, so let's use
-    // threshold=2 with 3 signers: removing one → 2 remaining ≥ 2 → reachable.
+    // The context rule has 3 signers. Removing any one leaves 2 < 3 → NOT
+    // reachable. But threshold=3 with 3 signers → removing one → 2 remaining,
+    // so let's use threshold=2 with 3 signers: removing one → 2 remaining ≥ 2 →
+    // reachable.
     let e2 = Env::default();
     let address2 = e2.register(ThresholdPolicy, ());
     let smart_account2 = Address::generate(&e2);
@@ -54,7 +55,8 @@ fn would_remain_reachable_true_when_remaining_equals_threshold() {
 
     let signer_to_remove = context_rule.signers.get_unchecked(0);
     e.as_contract(&address, || {
-        // 3 signers in rule, threshold=3. Removing one → 2 remaining < 3 → NOT reachable.
+        // 3 signers in rule, threshold=3. Removing one → 2 remaining < 3 → NOT
+        // reachable.
         assert!(!ThresholdPolicy::would_remain_reachable(
             &e,
             0,
@@ -174,7 +176,8 @@ fn would_remain_reachable_true_when_one_signer_and_threshold_one() {
 
     let signer_to_remove = context_rule.signers.get_unchecked(0);
     e.as_contract(&address, || {
-        // 1 signer, threshold=1. Removing the only signer → 0 remaining < 1 → NOT reachable.
+        // 1 signer, threshold=1. Removing the only signer → 0 remaining < 1 → NOT
+        // reachable.
         assert!(!ThresholdPolicy::would_remain_reachable(
             &e,
             0,

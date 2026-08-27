@@ -41,7 +41,6 @@
 #![no_std]
 
 use soroban_sdk::{auth::Context, contract, contractimpl, Address, Env, Vec};
-
 use stellar_accounts::{
     policies::{simple_threshold, simple_threshold::SimpleThresholdAccountParams, Policy},
     smart_account::{ContextRule, Signer},

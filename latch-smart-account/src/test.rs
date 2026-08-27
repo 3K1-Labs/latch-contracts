@@ -512,8 +512,8 @@ fn session_plus_spending_limit_disallowed_method_rejected_even_when_under_limit(
 // The threshold-policy and weighted-threshold-policy both implement
 // `would_remain_reachable`; non-threshold policies are skipped.
 
-use weighted_threshold_policy::WeightedThresholdPolicy;
 use stellar_accounts::policies::weighted_threshold::WeightedThresholdAccountParams;
+use weighted_threshold_policy::WeightedThresholdPolicy;
 
 /// Sets up a smart account with N signers and a threshold-policy installed
 /// at the given threshold, returning the account and client.
@@ -618,8 +618,8 @@ fn remove_signer_blocked_by_weighted_threshold_policy() {
     signer_weights.set(signer_a.clone(), 100u32);
     signer_weights.set(signer_b.clone(), 75u32);
     signer_weights.set(signer_c.clone(), 75u32);
-    let install_param: Val = WeightedThresholdAccountParams { signer_weights, threshold: 150 }
-        .into_val(&env);
+    let install_param: Val =
+        WeightedThresholdAccountParams { signer_weights, threshold: 150 }.into_val(&env);
     client.add_policy(&0, &wtp_id, &install_param);
 
     // Remove A (weight 100): remaining = 75+75 = 150 ≥ 150 → ok.
@@ -655,8 +655,8 @@ fn remove_signer_unreachable_blocked_by_weighted_threshold_policy() {
     signer_weights.set(signer_a.clone(), 100u32);
     signer_weights.set(signer_b.clone(), 75u32);
     signer_weights.set(signer_c.clone(), 75u32);
-    let install_param: Val = WeightedThresholdAccountParams { signer_weights, threshold: 200 }
-        .into_val(&env);
+    let install_param: Val =
+        WeightedThresholdAccountParams { signer_weights, threshold: 200 }.into_val(&env);
     client.add_policy(&0, &wtp_id, &install_param);
 
     // Total weight = 250. Removing any single signer drops below 200.
@@ -748,7 +748,8 @@ fn batch_add_signer_succeeds_without_threshold_policy_when_ack_true() {
 #[test]
 fn batch_add_signer_succeeds_when_reachable_with_acknowledgment() {
     let env = Env::default();
-    // 3 signers, threshold=2. Adding a 4th → 4-of-2 ratio (weaker but still reachable).
+    // 3 signers, threshold=2. Adding a 4th → 4-of-2 ratio (weaker but still
+    // reachable).
     let (_account_id, client) = setup_with_threshold(&env, 3, 2);
 
     let new_signer = Signer::Delegated(Address::generate(&env));

@@ -7,8 +7,8 @@ use soroban_sdk::{
     panic_with_error, vec, Address, BytesN, Env, IntoVal, Map, String, Symbol, Val, Vec,
 };
 use stellar_accounts::smart_account::{
-    self as smart_account, AuthPayload, ContextRule, ContextRuleType, ExecutionEntryPoint,
-    Signer, SmartAccount, SmartAccountError,
+    self as smart_account, AuthPayload, ContextRule, ContextRuleType, ExecutionEntryPoint, Signer,
+    SmartAccount, SmartAccountError,
 };
 use stellar_contract_utils::upgradeable::{self as upgradeable, Upgradeable};
 
@@ -26,7 +26,7 @@ pub enum LatchSmartAccountError {
     SignerRemovedWouldBreakPolicy = 1,
     /// Adding the signer would weaken the policy's threshold ratio (e.g.
     /// 3-of-3 becomes 3-of-5) and the caller did not explicitly
-    /// acknowledge this via `acknowledge_threshold_unchanged`.
+    /// acknowledge this via `ack_threshold`.
     SignerAddedWouldWeakenPolicy = 2,
 }
 
@@ -58,8 +58,8 @@ impl LatchSmartAccount {
     /// * `e` - Access to the Soroban environment.
     /// * `context_rule_id` - The ID of the context rule to modify.
     /// * `signers` - The signers to add.
-    /// * `ack_threshold` - Must be `true` for the addition to proceed.
-    ///   If `false`, the operation reverts with
+    /// * `ack_threshold` - Must be `true` for the addition to proceed. If
+    ///   `false`, the operation reverts with
     ///   [`LatchSmartAccountError::SignerAddedWouldWeakenPolicy`].
     pub fn batch_add_signer(
         e: &Env,
@@ -111,7 +111,7 @@ impl SmartAccount for LatchSmartAccount {
 
         let rule = smart_account::get_context_rule(e, context_rule_id);
         let signer_to_remove = resolve_signer(e, &rule, signer_id);
-        let remaining_count = rule.signers.len() - 1;
+        let remaining_count = rule.signers.len().saturating_sub(1);
 
         for policy in rule.policies.iter() {
             let args: Vec<Val> = vec![
