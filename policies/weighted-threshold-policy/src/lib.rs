@@ -51,7 +51,7 @@
 use soroban_sdk::{auth::Context, contract, contractimpl, Address, Env, Map, Vec};
 use stellar_accounts::{
     policies::{weighted_threshold, weighted_threshold::WeightedThresholdAccountParams, Policy},
-    smart_account::{ContextRule, Signer},
+    smart_account::{ContextRule, ContextRuleType, Signer},
 };
 
 #[contract]
@@ -93,10 +93,13 @@ impl Policy for WeightedThresholdPolicy {
 
 #[contractimpl]
 impl WeightedThresholdPolicy {
+    /// Returns the stored threshold for a context rule on this smart account.
     pub fn get_threshold(e: &Env, context_rule_id: u32, smart_account: Address) -> u32 {
         weighted_threshold::get_threshold(e, context_rule_id, &smart_account)
     }
 
+    /// Returns the signer-to-weight mapping for a context rule on this smart
+    /// account.
     pub fn get_signer_weights(
         e: &Env,
         context_rule: ContextRule,
@@ -105,6 +108,7 @@ impl WeightedThresholdPolicy {
         weighted_threshold::get_signer_weights(e, &context_rule, &smart_account)
     }
 
+    /// Updates the threshold for a context rule on this smart account.
     pub fn set_threshold(
         e: Env,
         threshold: u32,
@@ -114,6 +118,7 @@ impl WeightedThresholdPolicy {
         weighted_threshold::set_threshold(&e, threshold, &context_rule, &smart_account)
     }
 
+    /// Updates a signer's weight for a context rule on this smart account.
     pub fn set_signer_weight(
         e: Env,
         signer: Signer,
@@ -123,4 +128,56 @@ impl WeightedThresholdPolicy {
     ) {
         weighted_threshold::set_signer_weight(&e, &signer, weight, &context_rule, &smart_account)
     }
+
+    /// Checks whether removing a signer from a context rule would leave the
+    /// weight threshold reachable with the remaining signers' total weight.
+    ///
+    /// Computes the total weight of all signers in the context rule *except*
+    /// the proposed removal target, then compares against the stored threshold.
+    /// Returns `true` if the remaining weight is `>= threshold`, `false`
+    /// otherwise.
+    ///
+    /// # Arguments
+    ///
+    /// * `e` - Access to the Soroban environment.
+    /// * `context_rule_id` - The context rule ID for this policy.
+    /// * `smart_account` - The address of the smart account.
+    /// * `signer_to_remove` - The signer whose weight would be subtracted.
+    /// * `_remaining_signer_count` - Unused; included for interface
+    ///   compatibility with `threshold-policy`.
+    pub fn would_remain_reachable(
+        e: &Env,
+        context_rule_id: u32,
+        smart_account: Address,
+        signer_to_remove: Signer,
+        _remaining_signer_count: u32,
+    ) -> bool {
+        let threshold = weighted_threshold::get_threshold(e, context_rule_id, &smart_account);
+        let signer_weights = weighted_threshold::get_signer_weights(
+            e,
+            &ContextRule {
+                id: context_rule_id,
+                context_type: ContextRuleType::Default,
+                name: soroban_sdk::String::from_str(e, ""),
+                signers: Vec::new(e),
+                signer_ids: Vec::new(e),
+                policies: Vec::new(e),
+                policy_ids: Vec::new(e),
+                valid_until: None,
+            },
+            &smart_account,
+        );
+
+        let mut remaining_weight: u32 = 0;
+        for (signer, weight) in signer_weights.iter() {
+            if signer != signer_to_remove {
+                remaining_weight = remaining_weight.saturating_add(weight);
+            }
+        }
+
+        remaining_weight >= threshold
+    }
 }
+
+#[cfg(test)]
+mod test;

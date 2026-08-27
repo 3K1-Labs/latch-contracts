@@ -85,10 +85,12 @@ impl Policy for ThresholdPolicy {
 
 #[contractimpl]
 impl ThresholdPolicy {
+    /// Returns the stored threshold for a context rule on this smart account.
     pub fn get_threshold(e: &Env, context_rule_id: u32, smart_account: Address) -> u32 {
         simple_threshold::get_threshold(e, context_rule_id, &smart_account)
     }
 
+    /// Updates the threshold for a context rule on this smart account.
     pub fn set_threshold(
         e: Env,
         threshold: u32,
@@ -97,4 +99,35 @@ impl ThresholdPolicy {
     ) {
         simple_threshold::set_threshold(&e, threshold, &context_rule, &smart_account)
     }
+
+    /// Checks whether removing a signer from a context rule would leave the
+    /// threshold reachable with the remaining signers.
+    ///
+    /// Returns `true` if `remaining_signer_count >= stored_threshold`, `false`
+    /// otherwise. A `false` result means removing the proposed signer would
+    /// make it impossible to satisfy the threshold, permanently blocking
+    /// authorization for this context rule.
+    ///
+    /// # Arguments
+    ///
+    /// * `e` - Access to the Soroban environment.
+    /// * `context_rule_id` - The context rule ID for this policy.
+    /// * `smart_account` - The address of the smart account.
+    /// * `_signer_to_remove` - Unused; included for interface compatibility
+    ///   with `weighted-threshold-policy`.
+    /// * `remaining_signer_count` - The number of signers that would remain
+    ///   after the proposed removal, computed by the calling smart account.
+    pub fn would_remain_reachable(
+        e: &Env,
+        context_rule_id: u32,
+        smart_account: Address,
+        _signer_to_remove: Signer,
+        remaining_signer_count: u32,
+    ) -> bool {
+        let threshold = simple_threshold::get_threshold(e, context_rule_id, &smart_account);
+        remaining_signer_count >= threshold
+    }
 }
+
+#[cfg(test)]
+mod test;
