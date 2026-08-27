@@ -10,6 +10,7 @@ members = [
   "policies/threshold-policy",
   "policies/weighted-threshold-policy",
   "policies/session-policy",
+  "policies/parameter-scoped-policy",
   "policies/spending-limit-policy",
   "demo/modified-ed25519-verifier",
 ]
