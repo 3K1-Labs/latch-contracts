@@ -177,7 +177,9 @@ fn add_signer_and_policy_succeed_with_self_auth() {
 
     let default_rule = client.get_context_rule(&0);
     let new_signer = Signer::Delegated(Address::generate(&env));
-    let signer_id = client.add_signer(&default_rule.id, &new_signer);
+    // add_signer (singular) is disabled — batch_add_signer is the only
+    // addition path, and it requires confirm_threshold_unchanged.
+    client.batch_add_signer(&default_rule.id, &vec![&env, new_signer.clone()], &true);
 
     let policy_id = env.register(MockPolicyContract, ());
     let install_param: Val = Val::from_void().into();
@@ -185,6 +187,7 @@ fn add_signer_and_policy_succeed_with_self_auth() {
 
     let updated_rule = client.get_context_rule(&default_rule.id);
     assert!(updated_rule.signers.contains(&new_signer));
+    let signer_id = updated_rule.signer_ids.get(updated_rule.signer_ids.len() - 1).unwrap();
     assert_eq!(signer_id, 1);
     assert_eq!(added_policy_id, 0);
     assert!(updated_rule.policies.contains(&policy_id));
@@ -192,7 +195,7 @@ fn add_signer_and_policy_succeed_with_self_auth() {
 
 #[test]
 #[should_panic]
-fn add_signer_requires_self_auth() {
+fn batch_add_signer_requires_self_auth() {
     let env = Env::default();
 
     let signers = default_signers(&env);
@@ -200,6 +203,25 @@ fn add_signer_requires_self_auth() {
     let (_account_id, client) = register_account(&env, &signers, &policies);
 
     let default_rule = client.get_context_rule(&0);
+    let new_signer = Signer::Delegated(Address::generate(&env));
+    client.batch_add_signer(&default_rule.id, &vec![&env, new_signer], &true);
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #3)")]
+fn add_signer_singular_is_disabled() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let signers = default_signers(&env);
+    let policies = Map::new(&env);
+    let (_account_id, client) = register_account(&env, &signers, &policies);
+
+    let default_rule = client.get_context_rule(&0);
+    // The inherited SmartAccount::add_signer default has no way to require
+    // confirm_threshold_unchanged, so it's overridden to always panic with
+    // LatchSmartAccountError::SingleSignerAdditionDisabled (#3) — verifies
+    // the batch_add_signer bypass this used to allow is actually closed.
     client.add_signer(&default_rule.id, &Signer::Delegated(Address::generate(&env)));
 }
 
@@ -669,7 +691,7 @@ fn remove_signer_unreachable_blocked_by_weighted_threshold_policy() {
 // ################## BATCH_ADD_SIGNER TESTS ##################
 //
 // These tests exercise the `batch_add_signer` override with the
-// `ack_threshold_unchanged` parameter, which probes attached
+// `confirm_threshold_unchanged` parameter, which probes attached
 // policies after adding signers and reverts if any policy objects and
 // acknowledgment was not given.
 
@@ -681,7 +703,7 @@ fn batch_add_signer_succeeds_with_acknowledgment() {
 
     let new_signer = Signer::Delegated(Address::generate(&env));
     env.mock_all_auths();
-    // ack_threshold_unchanged = true → proceeds despite weakening.
+    // confirm_threshold_unchanged = true → proceeds despite weakening.
     client.batch_add_signer(&0, &vec![&env, new_signer.clone()], &true);
 
     let rule = client.get_context_rule(&0);
@@ -697,7 +719,7 @@ fn batch_add_signer_reverts_without_acknowledgment_when_policy_objects() {
 
     let new_signer = Signer::Delegated(Address::generate(&env));
     env.mock_all_auths();
-    // ack_threshold_unchanged = false → reverts.
+    // confirm_threshold_unchanged = false → reverts.
     client.batch_add_signer(&0, &vec![&env, new_signer], &false);
 }
 
@@ -717,7 +739,7 @@ fn batch_add_signer_reverts_when_ack_false_regardless_of_policies() {
     client.add_policy(&0, &mock_policy_id, &install_param);
 
     let new_signer = Signer::Delegated(Address::generate(&env));
-    // ack_threshold_unchanged = false always reverts, even without a
+    // confirm_threshold_unchanged = false always reverts, even without a
     // threshold policy.
     client.batch_add_signer(&0, &vec![&env, new_signer], &false);
 }
@@ -738,8 +760,8 @@ fn batch_add_signer_succeeds_without_threshold_policy_when_ack_true() {
     client.add_policy(&0, &mock_policy_id, &install_param);
 
     let new_signer = Signer::Delegated(Address::generate(&env));
-    // ack_threshold_unchanged = false always reverts, regardless of
-    // policies. Use ack_threshold_unchanged = true to succeed.
+    // confirm_threshold_unchanged = false always reverts, regardless of
+    // policies. Use confirm_threshold_unchanged = true to succeed.
     client.batch_add_signer(&0, &vec![&env, new_signer], &true);
 
     let rule = client.get_context_rule(&0);

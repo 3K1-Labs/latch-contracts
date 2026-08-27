@@ -26,8 +26,15 @@ pub enum LatchSmartAccountError {
     SignerRemovedWouldBreakPolicy = 1,
     /// Adding the signer would weaken the policy's threshold ratio (e.g.
     /// 3-of-3 becomes 3-of-5) and the caller did not explicitly
-    /// acknowledge this via `ack_threshold_unchanged`.
+    /// acknowledge this via `confirm_threshold_unchanged`.
     SignerAddedWouldWeakenPolicy = 2,
+    /// The single-signer `add_signer` entry point (inherited from
+    /// `SmartAccount`'s default) is disabled on this contract. Its fixed
+    /// trait signature has no room for a `confirm_threshold_unchanged`-style
+    /// acknowledgment, so it can't carry the same addition-side protection
+    /// `batch_add_signer` does. Use `batch_add_signer` instead, even for a
+    /// single signer.
+    SingleSignerAdditionDisabled = 3,
 }
 
 #[contract]
@@ -50,7 +57,7 @@ impl LatchSmartAccount {
     ///
     /// Requires the caller to explicitly acknowledge that adding signers
     /// may weaken the existing threshold ratio (e.g. a 3-of-3 becoming
-    /// 3-of-5). Setting `ack_threshold_unchanged = false` always
+    /// 3-of-5). Setting `confirm_threshold_unchanged = false` always
     /// reverts — this forces the caller to consciously accept the ratio
     /// change.
     ///
@@ -59,18 +66,18 @@ impl LatchSmartAccount {
     /// * `e` - Access to the Soroban environment.
     /// * `context_rule_id` - The ID of the context rule to modify.
     /// * `signers` - The signers to add.
-    /// * `ack_threshold_unchanged` - Must be `true` for the addition to
+    /// * `confirm_threshold_unchanged` - Must be `true` for the addition to
     ///   proceed. If `false`, the operation reverts with
     ///   [`LatchSmartAccountError::SignerAddedWouldWeakenPolicy`].
     pub fn batch_add_signer(
         e: &Env,
         context_rule_id: u32,
         signers: Vec<Signer>,
-        ack_threshold_unchanged: bool,
+        confirm_threshold_unchanged: bool,
     ) {
         e.current_contract_address().require_auth();
 
-        if !ack_threshold_unchanged {
+        if !confirm_threshold_unchanged {
             panic_with_error!(e, LatchSmartAccountError::SignerAddedWouldWeakenPolicy);
         }
 
@@ -107,6 +114,16 @@ impl CustomAccountInterface for LatchSmartAccount {
 
 #[contractimpl(contracttrait)]
 impl SmartAccount for LatchSmartAccount {
+    /// Disabled — the inherited default has no way to require the same
+    /// `confirm_threshold_unchanged` acknowledgment `batch_add_signer`
+    /// enforces, so leaving it live would let anyone bypass that check by
+    /// adding signers one at a time. Always panics with
+    /// [`LatchSmartAccountError::SingleSignerAdditionDisabled`]; use
+    /// `batch_add_signer` instead, even for a single signer.
+    fn add_signer(e: &Env, _context_rule_id: u32, _signer: Signer) -> u32 {
+        panic_with_error!(e, LatchSmartAccountError::SingleSignerAdditionDisabled);
+    }
+
     fn remove_signer(e: &Env, context_rule_id: u32, signer_id: u32) {
         e.current_contract_address().require_auth();
 
