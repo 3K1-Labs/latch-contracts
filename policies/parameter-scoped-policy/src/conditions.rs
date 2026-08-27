@@ -30,7 +30,7 @@
 use soroban_sdk::{
     auth::{Context, ContractContext},
     contracterror, contractevent, contracttype, panic_with_error, Address, Env, Map, Symbol,
-    TryIntoVal, Vec,
+    TryIntoVal, Val, Vec,
 };
 use stellar_accounts::smart_account::{ContextRule, ContextRuleType, Signer};
 
@@ -165,6 +165,51 @@ pub fn get_conditions(
         .unwrap_or_else(|| panic_with_error!(e, ParameterScopedError::SmartAccountNotInstalled))
 }
 
+/// Converts `actual_arg` to `T` and evaluates `operator` against `expected`.
+/// Covers all six ordered numeric [`ExpectedValue`] variants — `PartialOrd`'s
+/// supertrait bound on `PartialEq` gives us `Eq`/`Neq` for free alongside the
+/// ordering comparisons. Returns `false` (rather than propagating an error)
+/// when `actual_arg` isn't actually a `T` — a type mismatch fails the
+/// condition instead of panicking.
+fn compare_ord<T>(e: &Env, actual_arg: &Val, expected: &T, operator: &Operator) -> bool
+where
+    T: PartialOrd,
+    Val: TryIntoVal<Env, T>,
+{
+    let Ok(actual) = actual_arg.try_into_val(e) else {
+        return false;
+    };
+    let actual: T = actual;
+    match operator {
+        Operator::Eq => actual == *expected,
+        Operator::Neq => actual != *expected,
+        Operator::Gt => actual > *expected,
+        Operator::Gte => actual >= *expected,
+        Operator::Lt => actual < *expected,
+        Operator::Lte => actual <= *expected,
+    }
+}
+
+/// Same conversion/mismatch handling as [`compare_ord`], for the
+/// [`ExpectedValue`] variants (`Sym`, `Addr`) that only support equality —
+/// `install` already rejects any other operator paired with these, but
+/// `Gt`/`Gte`/`Lt`/`Lte` still need a defined (rejecting) fallback here.
+fn compare_eq<T>(e: &Env, actual_arg: &Val, expected: &T, operator: &Operator) -> bool
+where
+    T: PartialEq,
+    Val: TryIntoVal<Env, T>,
+{
+    let Ok(actual) = actual_arg.try_into_val(e) else {
+        return false;
+    };
+    let actual: T = actual;
+    match operator {
+        Operator::Eq => actual == *expected,
+        Operator::Neq => actual != *expected,
+        _ => false,
+    }
+}
+
 pub fn enforce(
     e: &Env,
     context: &Context,
@@ -193,118 +238,28 @@ pub fn enforce(
 
                 let passed = match &cond.expected_value {
                     ExpectedValue::U32(expected) => {
-                        if let Ok(actual) = actual_arg.try_into_val(e) {
-                            let actual: u32 = actual;
-                            match cond.operator {
-                                Operator::Eq => actual == *expected,
-                                Operator::Neq => actual != *expected,
-                                Operator::Gt => actual > *expected,
-                                Operator::Gte => actual >= *expected,
-                                Operator::Lt => actual < *expected,
-                                Operator::Lte => actual <= *expected,
-                            }
-                        } else {
-                            false
-                        }
+                        compare_ord(e, &actual_arg, expected, &cond.operator)
                     }
                     ExpectedValue::I32(expected) => {
-                        if let Ok(actual) = actual_arg.try_into_val(e) {
-                            let actual: i32 = actual;
-                            match cond.operator {
-                                Operator::Eq => actual == *expected,
-                                Operator::Neq => actual != *expected,
-                                Operator::Gt => actual > *expected,
-                                Operator::Gte => actual >= *expected,
-                                Operator::Lt => actual < *expected,
-                                Operator::Lte => actual <= *expected,
-                            }
-                        } else {
-                            false
-                        }
+                        compare_ord(e, &actual_arg, expected, &cond.operator)
                     }
                     ExpectedValue::U64(expected) => {
-                        if let Ok(actual) = actual_arg.try_into_val(e) {
-                            let actual: u64 = actual;
-                            match cond.operator {
-                                Operator::Eq => actual == *expected,
-                                Operator::Neq => actual != *expected,
-                                Operator::Gt => actual > *expected,
-                                Operator::Gte => actual >= *expected,
-                                Operator::Lt => actual < *expected,
-                                Operator::Lte => actual <= *expected,
-                            }
-                        } else {
-                            false
-                        }
+                        compare_ord(e, &actual_arg, expected, &cond.operator)
                     }
                     ExpectedValue::I64(expected) => {
-                        if let Ok(actual) = actual_arg.try_into_val(e) {
-                            let actual: i64 = actual;
-                            match cond.operator {
-                                Operator::Eq => actual == *expected,
-                                Operator::Neq => actual != *expected,
-                                Operator::Gt => actual > *expected,
-                                Operator::Gte => actual >= *expected,
-                                Operator::Lt => actual < *expected,
-                                Operator::Lte => actual <= *expected,
-                            }
-                        } else {
-                            false
-                        }
+                        compare_ord(e, &actual_arg, expected, &cond.operator)
                     }
                     ExpectedValue::U128(expected) => {
-                        if let Ok(actual) = actual_arg.try_into_val(e) {
-                            let actual: u128 = actual;
-                            match cond.operator {
-                                Operator::Eq => actual == *expected,
-                                Operator::Neq => actual != *expected,
-                                Operator::Gt => actual > *expected,
-                                Operator::Gte => actual >= *expected,
-                                Operator::Lt => actual < *expected,
-                                Operator::Lte => actual <= *expected,
-                            }
-                        } else {
-                            false
-                        }
+                        compare_ord(e, &actual_arg, expected, &cond.operator)
                     }
                     ExpectedValue::I128(expected) => {
-                        if let Ok(actual) = actual_arg.try_into_val(e) {
-                            let actual: i128 = actual;
-                            match cond.operator {
-                                Operator::Eq => actual == *expected,
-                                Operator::Neq => actual != *expected,
-                                Operator::Gt => actual > *expected,
-                                Operator::Gte => actual >= *expected,
-                                Operator::Lt => actual < *expected,
-                                Operator::Lte => actual <= *expected,
-                            }
-                        } else {
-                            false
-                        }
+                        compare_ord(e, &actual_arg, expected, &cond.operator)
                     }
                     ExpectedValue::Sym(expected) => {
-                        if let Ok(actual) = actual_arg.try_into_val(e) {
-                            let actual: Symbol = actual;
-                            match cond.operator {
-                                Operator::Eq => actual == *expected,
-                                Operator::Neq => actual != *expected,
-                                _ => false,
-                            }
-                        } else {
-                            false
-                        }
+                        compare_eq(e, &actual_arg, expected, &cond.operator)
                     }
                     ExpectedValue::Addr(expected) => {
-                        if let Ok(actual) = actual_arg.try_into_val(e) {
-                            let actual: Address = actual;
-                            match cond.operator {
-                                Operator::Eq => actual == *expected,
-                                Operator::Neq => actual != *expected,
-                                _ => false,
-                            }
-                        } else {
-                            false
-                        }
+                        compare_eq(e, &actual_arg, expected, &cond.operator)
                     }
                 };
 
