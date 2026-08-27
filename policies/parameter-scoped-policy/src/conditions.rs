@@ -5,7 +5,8 @@
 
 use soroban_sdk::{
     auth::{Context, ContractContext},
-    contracterror, contractevent, contracttype, panic_with_error, Address, Env, Map, Symbol, TryIntoVal, Vec,
+    contracterror, contractevent, contracttype, panic_with_error, Address, Env, Map, Symbol,
+    TryIntoVal, Vec,
 };
 use stellar_accounts::smart_account::{ContextRule, ContextRuleType, Signer};
 
@@ -103,32 +104,28 @@ pub const PARAMETER_SCOPED_TTL_THRESHOLD: u32 = PARAMETER_SCOPED_EXTEND_AMOUNT -
 pub const MAX_FNS: u32 = 10;
 pub const MAX_CONDITIONS_PER_FN: u32 = 5;
 
-pub fn emit_conditions_enforced(e: &Env, smart_account: Address, context_rule_id: u32, fn_name: Symbol) {
-    ConditionsEnforced {
-        smart_account,
-        context_rule_id,
-        fn_name,
-    }
-    .publish(e);
+pub fn emit_conditions_enforced(
+    e: &Env,
+    smart_account: Address,
+    context_rule_id: u32,
+    fn_name: Symbol,
+) {
+    ConditionsEnforced { smart_account, context_rule_id, fn_name }.publish(e);
 }
 
 pub fn emit_conditions_installed(e: &Env, smart_account: Address, context_rule_id: u32) {
-    ConditionsInstalled {
-        smart_account,
-        context_rule_id,
-    }
-    .publish(e);
+    ConditionsInstalled { smart_account, context_rule_id }.publish(e);
 }
 
 pub fn emit_conditions_uninstalled(e: &Env, smart_account: Address, context_rule_id: u32) {
-    ConditionsUninstalled {
-        smart_account,
-        context_rule_id,
-    }
-    .publish(e);
+    ConditionsUninstalled { smart_account, context_rule_id }.publish(e);
 }
 
-pub fn get_conditions(e: &Env, context_rule_id: u32, smart_account: &Address) -> Map<Symbol, Vec<Condition>> {
+pub fn get_conditions(
+    e: &Env,
+    context_rule_id: u32,
+    smart_account: &Address,
+) -> Map<Symbol, Vec<Condition>> {
     let key = ParameterScopedStorageKey::AccountContext(smart_account.clone(), context_rule_id);
     e.storage()
         .persistent()
@@ -166,9 +163,9 @@ pub fn enforce(
                 .unwrap_or_else(|| panic_with_error!(e, ParameterScopedError::MethodNotAllowed));
 
             for cond in fn_conditions.into_iter() {
-                let actual_arg = args
-                    .get(cond.arg_index)
-                    .unwrap_or_else(|| panic_with_error!(e, ParameterScopedError::ArgumentIndexOutOfBounds));
+                let actual_arg = args.get(cond.arg_index).unwrap_or_else(|| {
+                    panic_with_error!(e, ParameterScopedError::ArgumentIndexOutOfBounds)
+                });
 
                 let passed = match &cond.expected_value {
                     ExpectedValue::U32(expected) => {
@@ -321,10 +318,10 @@ pub fn install(
         // Validate operator compatibility
         for cond in fn_conditions.iter() {
             match cond.expected_value {
-                ExpectedValue::Sym(_) | ExpectedValue::Addr(_) => {
-                    if cond.operator != Operator::Eq && cond.operator != Operator::Neq {
-                        panic_with_error!(e, ParameterScopedError::InvalidConditions)
-                    }
+                ExpectedValue::Sym(_) | ExpectedValue::Addr(_)
+                    if cond.operator != Operator::Eq && cond.operator != Operator::Neq =>
+                {
+                    panic_with_error!(e, ParameterScopedError::InvalidConditions)
                 }
                 _ => {}
             }
@@ -336,9 +333,7 @@ pub fn install(
         panic_with_error!(e, ParameterScopedError::AlreadyInstalled)
     }
 
-    let data = ParameterScopedData {
-        conditions: params.conditions.clone(),
-    };
+    let data = ParameterScopedData { conditions: params.conditions.clone() };
     e.storage().persistent().set(&key, &data);
     emit_conditions_installed(e, smart_account.clone(), context_rule.id);
 }

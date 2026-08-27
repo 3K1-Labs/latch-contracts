@@ -37,7 +37,12 @@ fn create_context_rule(e: &Env, target: &Address) -> ContextRule {
     }
 }
 
-fn create_contract_context(e: &Env, target: &Address, fn_name: &str, args: Vec<soroban_sdk::Val>) -> Context {
+fn create_contract_context(
+    e: &Env,
+    target: &Address,
+    fn_name: &str,
+    args: Vec<soroban_sdk::Val>,
+) -> Context {
     Context::Contract(ContractContext {
         contract: target.clone(),
         fn_name: Symbol::new(e, fn_name),
@@ -51,11 +56,14 @@ fn test_install_and_get_conditions() {
     let rule = create_context_rule(&e, &target);
 
     let mut conditions = Map::new(&e);
-    let conds = Vec::from_array(&e, [Condition {
-        arg_index: 0,
-        operator: Operator::Eq,
-        expected_value: ExpectedValue::U32(42),
-    }]);
+    let conds = Vec::from_array(
+        &e,
+        [Condition {
+            arg_index: 0,
+            operator: Operator::Eq,
+            expected_value: ExpectedValue::U32(42),
+        }],
+    );
     conditions.set(Symbol::new(&e, "transfer"), conds);
 
     let params = ParameterScopedAccountParams { conditions };
@@ -77,17 +85,25 @@ fn run_operator_test(operator: Operator, expected: u32, actual: u32) {
     let rule = create_context_rule(&e, &target);
 
     let mut conditions = Map::new(&e);
-    conditions.set(Symbol::new(&e, "swap"), Vec::from_array(&e, [Condition {
-        arg_index: 0,
-        operator,
-        expected_value: ExpectedValue::U32(expected),
-    }]));
+    conditions.set(
+        Symbol::new(&e, "swap"),
+        Vec::from_array(
+            &e,
+            [Condition { arg_index: 0, operator, expected_value: ExpectedValue::U32(expected) }],
+        ),
+    );
 
     e.as_contract(&policy_id, || {
-        conditions::install(&e, &ParameterScopedAccountParams { conditions }, &rule, &smart_account);
+        conditions::install(
+            &e,
+            &ParameterScopedAccountParams { conditions },
+            &rule,
+            &smart_account,
+        );
     });
 
-    let context = create_contract_context(&e, &target, "swap", Vec::from_array(&e, [actual.into_val(&e)]));
+    let context =
+        create_contract_context(&e, &target, "swap", Vec::from_array(&e, [actual.into_val(&e)]));
     let signers = Vec::from_array(&e, [Signer::Delegated(Address::generate(&e))]);
 
     e.as_contract(&policy_id, || {
@@ -96,60 +112,92 @@ fn run_operator_test(operator: Operator, expected: u32, actual: u32) {
 }
 
 #[test]
-fn test_operator_eq_accept() { run_operator_test(Operator::Eq, 100, 100); }
+fn test_operator_eq_accept() {
+    run_operator_test(Operator::Eq, 100, 100);
+}
 
 #[test]
 #[should_panic(expected = "Error(Contract, #5)")]
-fn test_operator_eq_reject() { run_operator_test(Operator::Eq, 100, 101); }
+fn test_operator_eq_reject() {
+    run_operator_test(Operator::Eq, 100, 101);
+}
 
 #[test]
-fn test_operator_neq_accept() { run_operator_test(Operator::Neq, 100, 101); }
-
-#[test]
-#[should_panic(expected = "Error(Contract, #5)")]
-fn test_operator_neq_reject() { run_operator_test(Operator::Neq, 100, 100); }
-
-#[test]
-fn test_operator_gt_accept() { run_operator_test(Operator::Gt, 100, 101); }
+fn test_operator_neq_accept() {
+    run_operator_test(Operator::Neq, 100, 101);
+}
 
 #[test]
 #[should_panic(expected = "Error(Contract, #5)")]
-fn test_operator_gt_reject_equal() { run_operator_test(Operator::Gt, 100, 100); }
+fn test_operator_neq_reject() {
+    run_operator_test(Operator::Neq, 100, 100);
+}
+
+#[test]
+fn test_operator_gt_accept() {
+    run_operator_test(Operator::Gt, 100, 101);
+}
 
 #[test]
 #[should_panic(expected = "Error(Contract, #5)")]
-fn test_operator_gt_reject_less() { run_operator_test(Operator::Gt, 100, 99); }
-
-#[test]
-fn test_operator_gte_accept_greater() { run_operator_test(Operator::Gte, 100, 101); }
-
-#[test]
-fn test_operator_gte_accept_equal() { run_operator_test(Operator::Gte, 100, 100); }
+fn test_operator_gt_reject_equal() {
+    run_operator_test(Operator::Gt, 100, 100);
+}
 
 #[test]
 #[should_panic(expected = "Error(Contract, #5)")]
-fn test_operator_gte_reject() { run_operator_test(Operator::Gte, 100, 99); }
+fn test_operator_gt_reject_less() {
+    run_operator_test(Operator::Gt, 100, 99);
+}
 
 #[test]
-fn test_operator_lt_accept() { run_operator_test(Operator::Lt, 100, 99); }
+fn test_operator_gte_accept_greater() {
+    run_operator_test(Operator::Gte, 100, 101);
+}
 
 #[test]
-#[should_panic(expected = "Error(Contract, #5)")]
-fn test_operator_lt_reject_equal() { run_operator_test(Operator::Lt, 100, 100); }
-
-#[test]
-#[should_panic(expected = "Error(Contract, #5)")]
-fn test_operator_lt_reject_greater() { run_operator_test(Operator::Lt, 100, 101); }
-
-#[test]
-fn test_operator_lte_accept_less() { run_operator_test(Operator::Lte, 100, 99); }
-
-#[test]
-fn test_operator_lte_accept_equal() { run_operator_test(Operator::Lte, 100, 100); }
+fn test_operator_gte_accept_equal() {
+    run_operator_test(Operator::Gte, 100, 100);
+}
 
 #[test]
 #[should_panic(expected = "Error(Contract, #5)")]
-fn test_operator_lte_reject() { run_operator_test(Operator::Lte, 100, 101); }
+fn test_operator_gte_reject() {
+    run_operator_test(Operator::Gte, 100, 99);
+}
+
+#[test]
+fn test_operator_lt_accept() {
+    run_operator_test(Operator::Lt, 100, 99);
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #5)")]
+fn test_operator_lt_reject_equal() {
+    run_operator_test(Operator::Lt, 100, 100);
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #5)")]
+fn test_operator_lt_reject_greater() {
+    run_operator_test(Operator::Lt, 100, 101);
+}
+
+#[test]
+fn test_operator_lte_accept_less() {
+    run_operator_test(Operator::Lte, 100, 99);
+}
+
+#[test]
+fn test_operator_lte_accept_equal() {
+    run_operator_test(Operator::Lte, 100, 100);
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #5)")]
+fn test_operator_lte_reject() {
+    run_operator_test(Operator::Lte, 100, 101);
+}
 
 // ==========================================
 // ADDITIONAL TYPE TESTS (I32, U64, I64, U128, I128, Sym, Addr)
@@ -160,11 +208,31 @@ fn test_type_i32_accept() {
     let (e, smart_account, _, target, policy_id) = setup();
     let rule = create_context_rule(&e, &target);
     let mut conditions = Map::new(&e);
-    conditions.set(Symbol::new(&e, "swap"), Vec::from_array(&e, [Condition { arg_index: 0, operator: Operator::Lt, expected_value: ExpectedValue::I32(0) }]));
-    e.as_contract(&policy_id, || { conditions::install(&e, &ParameterScopedAccountParams { conditions }, &rule, &smart_account); });
-    let context = create_contract_context(&e, &target, "swap", Vec::from_array(&e, [(-10i32).into_val(&e)]));
+    conditions.set(
+        Symbol::new(&e, "swap"),
+        Vec::from_array(
+            &e,
+            [Condition {
+                arg_index: 0,
+                operator: Operator::Lt,
+                expected_value: ExpectedValue::I32(0),
+            }],
+        ),
+    );
+    e.as_contract(&policy_id, || {
+        conditions::install(
+            &e,
+            &ParameterScopedAccountParams { conditions },
+            &rule,
+            &smart_account,
+        );
+    });
+    let context =
+        create_contract_context(&e, &target, "swap", Vec::from_array(&e, [(-10i32).into_val(&e)]));
     let signers = Vec::from_array(&e, [Signer::Delegated(Address::generate(&e))]);
-    e.as_contract(&policy_id, || { conditions::enforce(&e, &context, &signers, &rule, &smart_account); });
+    e.as_contract(&policy_id, || {
+        conditions::enforce(&e, &context, &signers, &rule, &smart_account);
+    });
 }
 
 #[test]
@@ -173,11 +241,31 @@ fn test_type_u64_reject() {
     let (e, smart_account, _, target, policy_id) = setup();
     let rule = create_context_rule(&e, &target);
     let mut conditions = Map::new(&e);
-    conditions.set(Symbol::new(&e, "swap"), Vec::from_array(&e, [Condition { arg_index: 0, operator: Operator::Eq, expected_value: ExpectedValue::U64(500) }]));
-    e.as_contract(&policy_id, || { conditions::install(&e, &ParameterScopedAccountParams { conditions }, &rule, &smart_account); });
-    let context = create_contract_context(&e, &target, "swap", Vec::from_array(&e, [501u64.into_val(&e)]));
+    conditions.set(
+        Symbol::new(&e, "swap"),
+        Vec::from_array(
+            &e,
+            [Condition {
+                arg_index: 0,
+                operator: Operator::Eq,
+                expected_value: ExpectedValue::U64(500),
+            }],
+        ),
+    );
+    e.as_contract(&policy_id, || {
+        conditions::install(
+            &e,
+            &ParameterScopedAccountParams { conditions },
+            &rule,
+            &smart_account,
+        );
+    });
+    let context =
+        create_contract_context(&e, &target, "swap", Vec::from_array(&e, [501u64.into_val(&e)]));
     let signers = Vec::from_array(&e, [Signer::Delegated(Address::generate(&e))]);
-    e.as_contract(&policy_id, || { conditions::enforce(&e, &context, &signers, &rule, &smart_account); });
+    e.as_contract(&policy_id, || {
+        conditions::enforce(&e, &context, &signers, &rule, &smart_account);
+    });
 }
 
 #[test]
@@ -185,11 +273,31 @@ fn test_type_i64_accept() {
     let (e, smart_account, _, target, policy_id) = setup();
     let rule = create_context_rule(&e, &target);
     let mut conditions = Map::new(&e);
-    conditions.set(Symbol::new(&e, "swap"), Vec::from_array(&e, [Condition { arg_index: 0, operator: Operator::Gte, expected_value: ExpectedValue::I64(-1000) }]));
-    e.as_contract(&policy_id, || { conditions::install(&e, &ParameterScopedAccountParams { conditions }, &rule, &smart_account); });
-    let context = create_contract_context(&e, &target, "swap", Vec::from_array(&e, [(-500i64).into_val(&e)]));
+    conditions.set(
+        Symbol::new(&e, "swap"),
+        Vec::from_array(
+            &e,
+            [Condition {
+                arg_index: 0,
+                operator: Operator::Gte,
+                expected_value: ExpectedValue::I64(-1000),
+            }],
+        ),
+    );
+    e.as_contract(&policy_id, || {
+        conditions::install(
+            &e,
+            &ParameterScopedAccountParams { conditions },
+            &rule,
+            &smart_account,
+        );
+    });
+    let context =
+        create_contract_context(&e, &target, "swap", Vec::from_array(&e, [(-500i64).into_val(&e)]));
     let signers = Vec::from_array(&e, [Signer::Delegated(Address::generate(&e))]);
-    e.as_contract(&policy_id, || { conditions::enforce(&e, &context, &signers, &rule, &smart_account); });
+    e.as_contract(&policy_id, || {
+        conditions::enforce(&e, &context, &signers, &rule, &smart_account);
+    });
 }
 
 #[test]
@@ -197,11 +305,35 @@ fn test_type_u128_accept() {
     let (e, smart_account, _, target, policy_id) = setup();
     let rule = create_context_rule(&e, &target);
     let mut conditions = Map::new(&e);
-    conditions.set(Symbol::new(&e, "swap"), Vec::from_array(&e, [Condition { arg_index: 0, operator: Operator::Gte, expected_value: ExpectedValue::U128(1_000_000) }]));
-    e.as_contract(&policy_id, || { conditions::install(&e, &ParameterScopedAccountParams { conditions }, &rule, &smart_account); });
-    let context = create_contract_context(&e, &target, "swap", Vec::from_array(&e, [1_000_000u128.into_val(&e)]));
+    conditions.set(
+        Symbol::new(&e, "swap"),
+        Vec::from_array(
+            &e,
+            [Condition {
+                arg_index: 0,
+                operator: Operator::Gte,
+                expected_value: ExpectedValue::U128(1_000_000),
+            }],
+        ),
+    );
+    e.as_contract(&policy_id, || {
+        conditions::install(
+            &e,
+            &ParameterScopedAccountParams { conditions },
+            &rule,
+            &smart_account,
+        );
+    });
+    let context = create_contract_context(
+        &e,
+        &target,
+        "swap",
+        Vec::from_array(&e, [1_000_000u128.into_val(&e)]),
+    );
     let signers = Vec::from_array(&e, [Signer::Delegated(Address::generate(&e))]);
-    e.as_contract(&policy_id, || { conditions::enforce(&e, &context, &signers, &rule, &smart_account); });
+    e.as_contract(&policy_id, || {
+        conditions::enforce(&e, &context, &signers, &rule, &smart_account);
+    });
 }
 
 #[test]
@@ -210,11 +342,35 @@ fn test_type_i128_reject() {
     let (e, smart_account, _, target, policy_id) = setup();
     let rule = create_context_rule(&e, &target);
     let mut conditions = Map::new(&e);
-    conditions.set(Symbol::new(&e, "swap"), Vec::from_array(&e, [Condition { arg_index: 0, operator: Operator::Lt, expected_value: ExpectedValue::I128(-500) }]));
-    e.as_contract(&policy_id, || { conditions::install(&e, &ParameterScopedAccountParams { conditions }, &rule, &smart_account); });
-    let context = create_contract_context(&e, &target, "swap", Vec::from_array(&e, [(-500i128).into_val(&e)]));
+    conditions.set(
+        Symbol::new(&e, "swap"),
+        Vec::from_array(
+            &e,
+            [Condition {
+                arg_index: 0,
+                operator: Operator::Lt,
+                expected_value: ExpectedValue::I128(-500),
+            }],
+        ),
+    );
+    e.as_contract(&policy_id, || {
+        conditions::install(
+            &e,
+            &ParameterScopedAccountParams { conditions },
+            &rule,
+            &smart_account,
+        );
+    });
+    let context = create_contract_context(
+        &e,
+        &target,
+        "swap",
+        Vec::from_array(&e, [(-500i128).into_val(&e)]),
+    );
     let signers = Vec::from_array(&e, [Signer::Delegated(Address::generate(&e))]);
-    e.as_contract(&policy_id, || { conditions::enforce(&e, &context, &signers, &rule, &smart_account); });
+    e.as_contract(&policy_id, || {
+        conditions::enforce(&e, &context, &signers, &rule, &smart_account);
+    });
 }
 
 #[test]
@@ -222,11 +378,35 @@ fn test_type_sym_accept() {
     let (e, smart_account, _, target, policy_id) = setup();
     let rule = create_context_rule(&e, &target);
     let mut conditions = Map::new(&e);
-    conditions.set(Symbol::new(&e, "swap"), Vec::from_array(&e, [Condition { arg_index: 0, operator: Operator::Eq, expected_value: ExpectedValue::Sym(Symbol::new(&e, "USDC")) }]));
-    e.as_contract(&policy_id, || { conditions::install(&e, &ParameterScopedAccountParams { conditions }, &rule, &smart_account); });
-    let context = create_contract_context(&e, &target, "swap", Vec::from_array(&e, [Symbol::new(&e, "USDC").into_val(&e)]));
+    conditions.set(
+        Symbol::new(&e, "swap"),
+        Vec::from_array(
+            &e,
+            [Condition {
+                arg_index: 0,
+                operator: Operator::Eq,
+                expected_value: ExpectedValue::Sym(Symbol::new(&e, "USDC")),
+            }],
+        ),
+    );
+    e.as_contract(&policy_id, || {
+        conditions::install(
+            &e,
+            &ParameterScopedAccountParams { conditions },
+            &rule,
+            &smart_account,
+        );
+    });
+    let context = create_contract_context(
+        &e,
+        &target,
+        "swap",
+        Vec::from_array(&e, [Symbol::new(&e, "USDC").into_val(&e)]),
+    );
     let signers = Vec::from_array(&e, [Signer::Delegated(Address::generate(&e))]);
-    e.as_contract(&policy_id, || { conditions::enforce(&e, &context, &signers, &rule, &smart_account); });
+    e.as_contract(&policy_id, || {
+        conditions::enforce(&e, &context, &signers, &rule, &smart_account);
+    });
 }
 
 #[test]
@@ -237,11 +417,35 @@ fn test_type_addr_reject() {
     let expected_addr = Address::generate(&e);
     let actual_addr = Address::generate(&e);
     let mut conditions = Map::new(&e);
-    conditions.set(Symbol::new(&e, "swap"), Vec::from_array(&e, [Condition { arg_index: 0, operator: Operator::Eq, expected_value: ExpectedValue::Addr(expected_addr) }]));
-    e.as_contract(&policy_id, || { conditions::install(&e, &ParameterScopedAccountParams { conditions }, &rule, &smart_account); });
-    let context = create_contract_context(&e, &target, "swap", Vec::from_array(&e, [actual_addr.into_val(&e)]));
+    conditions.set(
+        Symbol::new(&e, "swap"),
+        Vec::from_array(
+            &e,
+            [Condition {
+                arg_index: 0,
+                operator: Operator::Eq,
+                expected_value: ExpectedValue::Addr(expected_addr),
+            }],
+        ),
+    );
+    e.as_contract(&policy_id, || {
+        conditions::install(
+            &e,
+            &ParameterScopedAccountParams { conditions },
+            &rule,
+            &smart_account,
+        );
+    });
+    let context = create_contract_context(
+        &e,
+        &target,
+        "swap",
+        Vec::from_array(&e, [actual_addr.into_val(&e)]),
+    );
     let signers = Vec::from_array(&e, [Signer::Delegated(Address::generate(&e))]);
-    e.as_contract(&policy_id, || { conditions::enforce(&e, &context, &signers, &rule, &smart_account); });
+    e.as_contract(&policy_id, || {
+        conditions::enforce(&e, &context, &signers, &rule, &smart_account);
+    });
 }
 
 // ==========================================
@@ -254,13 +458,24 @@ fn test_install_sym_rejects_invalid_operator() {
     let (e, smart_account, _, target, policy_id) = setup();
     let rule = create_context_rule(&e, &target);
     let mut conditions = Map::new(&e);
-    conditions.set(Symbol::new(&e, "swap"), Vec::from_array(&e, [Condition {
-        arg_index: 0,
-        operator: Operator::Gt, // Invalid for Sym
-        expected_value: ExpectedValue::Sym(Symbol::new(&e, "USDC")),
-    }]));
+    conditions.set(
+        Symbol::new(&e, "swap"),
+        Vec::from_array(
+            &e,
+            [Condition {
+                arg_index: 0,
+                operator: Operator::Gt, // Invalid for Sym
+                expected_value: ExpectedValue::Sym(Symbol::new(&e, "USDC")),
+            }],
+        ),
+    );
     e.as_contract(&policy_id, || {
-        conditions::install(&e, &ParameterScopedAccountParams { conditions }, &rule, &smart_account);
+        conditions::install(
+            &e,
+            &ParameterScopedAccountParams { conditions },
+            &rule,
+            &smart_account,
+        );
     });
 }
 
@@ -270,13 +485,24 @@ fn test_install_addr_rejects_invalid_operator() {
     let (e, smart_account, _, target, policy_id) = setup();
     let rule = create_context_rule(&e, &target);
     let mut conditions = Map::new(&e);
-    conditions.set(Symbol::new(&e, "swap"), Vec::from_array(&e, [Condition {
-        arg_index: 0,
-        operator: Operator::Lt, // Invalid for Addr
-        expected_value: ExpectedValue::Addr(Address::generate(&e)),
-    }]));
+    conditions.set(
+        Symbol::new(&e, "swap"),
+        Vec::from_array(
+            &e,
+            [Condition {
+                arg_index: 0,
+                operator: Operator::Lt, // Invalid for Addr
+                expected_value: ExpectedValue::Addr(Address::generate(&e)),
+            }],
+        ),
+    );
     e.as_contract(&policy_id, || {
-        conditions::install(&e, &ParameterScopedAccountParams { conditions }, &rule, &smart_account);
+        conditions::install(
+            &e,
+            &ParameterScopedAccountParams { conditions },
+            &rule,
+            &smart_account,
+        );
     });
 }
 
@@ -287,17 +513,29 @@ fn test_enforce_fails_index_out_of_bounds() {
     let rule = create_context_rule(&e, &target);
 
     let mut conditions = Map::new(&e);
-    conditions.set(Symbol::new(&e, "swap"), Vec::from_array(&e, [Condition {
-        arg_index: 1,
-        operator: Operator::Eq,
-        expected_value: ExpectedValue::U32(100),
-    }]));
+    conditions.set(
+        Symbol::new(&e, "swap"),
+        Vec::from_array(
+            &e,
+            [Condition {
+                arg_index: 1,
+                operator: Operator::Eq,
+                expected_value: ExpectedValue::U32(100),
+            }],
+        ),
+    );
 
     e.as_contract(&policy_id, || {
-        conditions::install(&e, &ParameterScopedAccountParams { conditions }, &rule, &smart_account);
+        conditions::install(
+            &e,
+            &ParameterScopedAccountParams { conditions },
+            &rule,
+            &smart_account,
+        );
     });
 
-    let context = create_contract_context(&e, &target, "swap", Vec::from_array(&e, [100u32.into_val(&e)]));
+    let context =
+        create_contract_context(&e, &target, "swap", Vec::from_array(&e, [100u32.into_val(&e)]));
     let signers = Vec::from_array(&e, [Signer::Delegated(Address::generate(&e))]);
 
     e.as_contract(&policy_id, || {
@@ -312,14 +550,25 @@ fn test_enforce_fails_unconfigured_function() {
     let rule = create_context_rule(&e, &target);
 
     let mut conditions = Map::new(&e);
-    conditions.set(Symbol::new(&e, "swap"), Vec::from_array(&e, [Condition {
-        arg_index: 0,
-        operator: Operator::Eq,
-        expected_value: ExpectedValue::U32(100),
-    }]));
+    conditions.set(
+        Symbol::new(&e, "swap"),
+        Vec::from_array(
+            &e,
+            [Condition {
+                arg_index: 0,
+                operator: Operator::Eq,
+                expected_value: ExpectedValue::U32(100),
+            }],
+        ),
+    );
 
     e.as_contract(&policy_id, || {
-        conditions::install(&e, &ParameterScopedAccountParams { conditions }, &rule, &smart_account);
+        conditions::install(
+            &e,
+            &ParameterScopedAccountParams { conditions },
+            &rule,
+            &smart_account,
+        );
     });
 
     let context = create_contract_context(&e, &target, "approve", Vec::new(&e));
