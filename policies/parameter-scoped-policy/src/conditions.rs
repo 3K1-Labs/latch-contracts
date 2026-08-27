@@ -1,7 +1,31 @@
 //! # Parameter Scoped Policy Module
 //!
 //! This policy restricts a context rule's signers to specific parameter values
-//! when invoking a contract function.
+//! when invoking a contract function. Each [`Condition`] is `(arg_index,
+//! operator, expected_value)` — it pulls the real argument at `arg_index` out
+//! of the actual call and compares it against `expected_value`. Conditions
+//! are configured per function name; calling a function with no configured
+//! conditions is rejected outright, not silently allowed through — so
+//! installing this policy also acts as its own function allowlist, on top of
+//! whatever `session-policy` separately allows for the same context rule.
+//!
+//! ## Why this is useful: two motivating examples
+//!
+//! - **Spender pinning.** SEP-41's `approve(from, spender, amount,
+//!   expiration_ledger)` lets a session key hand another contract permission to
+//!   move tokens on the account's behalf. A compromised or misbehaving session
+//!   key with unrestricted `approve` access could approve an
+//!   attacker-controlled address for the full balance. Pinning `spender` —
+//!   `Condition { arg_index: 1, operator: Eq, expected_value: Addr(known_dex)
+//!   }` — means the account will only ever authorize an `approve` naming that
+//!   one trusted address, no matter what the session key is told to do.
+//! - **Amount floor scoping.** A DEX `swap(..., min_amount_out, ...)` call's
+//!   `min_amount_out` is slippage protection — set it too low (or to zero) and
+//!   the swap is exposed to a sandwich attack. Scoping it — `Condition {
+//!   arg_index: N, operator: Gte, expected_value: I128(floor) }` — means the
+//!   account refuses to authorize a swap whose stated minimum return falls
+//!   below a floor fixed at install time, regardless of what a buggy or
+//!   malicious caller tries to submit.
 
 use soroban_sdk::{
     auth::{Context, ContractContext},
