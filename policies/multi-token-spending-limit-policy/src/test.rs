@@ -10,8 +10,9 @@ use soroban_sdk::{
 use stellar_accounts::smart_account::{ContextRule, ContextRuleType, Signer};
 
 use crate::{
-    Asset, MultiTokenSpendingLimitAccountParams, MultiTokenSpendingLimitPolicy,
-    MultiTokenSpendingLimitPolicyClient, PriceData, LEDGER_CLOSE_TIME_SECS, MAX_STALENESS_LEDGERS,
+    oracle::{Asset, PriceData},
+    MultiTokenSpendingLimitAccountParams, MultiTokenSpendingLimitPolicy,
+    MultiTokenSpendingLimitPolicyClient, LEDGER_CLOSE_TIME_SECS, MAX_STALENESS_LEDGERS,
 };
 
 /// $1.00 at the mock oracle's default 8-decimal fixed-point convention.

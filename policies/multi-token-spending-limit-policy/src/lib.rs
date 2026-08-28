@@ -35,12 +35,15 @@
 use soroban_sdk::{
     auth::{Context, ContractContext},
     contract, contracterror, contractimpl, contracttype, panic_with_error, symbol_short, Address,
-    Env, IntoVal, Symbol, TryFromVal, Vec,
+    Env, TryFromVal, Vec,
 };
 use stellar_accounts::{
     policies::Policy,
     smart_account::{ContextRule, ContextRuleType, Signer},
 };
+
+mod oracle;
+use oracle::{fetch_price, fetch_usd_divisor};
 
 /// Error codes for the multi-token spending limit policy.
 ///
@@ -76,28 +79,6 @@ pub enum Error {
     /// The oracle returned no price for the asset (`lastprice` gave `None`),
     /// or its `decimals()` value can't be used to build a base-10 divisor.
     InvalidOracleResponse = 10,
-}
-
-/// SEP-40 asset descriptor, as understood by a Reflector-compatible oracle.
-/// Reflector prices either a Stellar contract address directly, or an
-/// external ticker (e.g. `"BTC"`, `"USD"`) on feeds that track off-chain
-/// assets — this policy only ever queries the former, one allowed token at
-/// a time.
-#[contracttype]
-#[derive(Clone, Debug, PartialEq)]
-pub enum Asset {
-    Stellar(Address),
-    Other(Symbol),
-}
-
-/// Price feed shape returned by a SEP-40 / Reflector-compatible oracle's
-/// `lastprice`. Field names and the enclosing `Option` match the oracle's
-/// actual return type so this decodes correctly against a real deployment.
-#[contracttype]
-#[derive(Clone, Debug, PartialEq)]
-pub struct PriceData {
-    pub price: i128,
-    pub timestamp: u64,
 }
 
 /// Installation parameters for the multi-token spending limit policy.
@@ -170,14 +151,6 @@ const MAX_STALENESS_LEDGERS: u32 = 100;
 /// sequence.
 const LEDGER_CLOSE_TIME_SECS: u64 = 5;
 
-/// A generous upper bound on a plausible oracle `decimals()` value. Guards
-/// `10i128.checked_pow` against overflow if a misconfigured or malicious
-/// oracle address returns something absurd.
-const MAX_ORACLE_DECIMALS: u32 = 30;
-
-const LASTPRICE_FN: Symbol = symbol_short!("lastprice");
-const DECIMALS_FN: Symbol = symbol_short!("decimals");
-
 // ################## HELPERS ##################
 
 /// Loads the stored policy data for a `(smart_account, context_rule)` pair,
@@ -191,18 +164,6 @@ fn get_policy_data(e: &Env, context_rule_id: u32, smart_account: &Address) -> Po
             e.storage().persistent().extend_ttl(&key, POLICY_TTL_THRESHOLD, POLICY_EXTEND_AMOUNT);
         })
         .unwrap_or_else(|| panic_with_error!(e, Error::NotInstalled))
-}
-
-/// Queries the oracle's `decimals()` and converts it into a base-10 divisor,
-/// failing closed if the value can't plausibly be used as one.
-fn fetch_usd_divisor(e: &Env, oracle_address: &Address) -> i128 {
-    let decimals: u32 = e.invoke_contract(oracle_address, &DECIMALS_FN, Vec::new(e));
-    if decimals > MAX_ORACLE_DECIMALS {
-        panic_with_error!(e, Error::InvalidOracleResponse)
-    }
-    10i128
-        .checked_pow(decimals)
-        .unwrap_or_else(|| panic_with_error!(e, Error::InvalidOracleResponse))
 }
 
 /// Evicts spending entries older than the rolling window and returns the
@@ -367,17 +328,11 @@ impl Policy for MultiTokenSpendingLimitPolicy {
             panic_with_error!(e, Error::TokenNotAllowed)
         }
 
-        // Fails closed: if the oracle call reverts, `invoke_contract`
-        // panics and the transfer is rejected. If it succeeds but has no
-        // price for this asset, `lastprice` returns `None` rather than
-        // reverting, so that case is checked explicitly below.
-        let price_data: Option<PriceData> = e.invoke_contract(
-            &data.oracle_address,
-            &LASTPRICE_FN,
-            soroban_sdk::vec![e, Asset::Stellar(target).into_val(e)],
-        );
-        let price_data =
-            price_data.unwrap_or_else(|| panic_with_error!(e, Error::InvalidOracleResponse));
+        // Fails closed: `fetch_price` panics if the oracle call reverts,
+        // and turns a `None` response (no price for this asset) into
+        // `Error::InvalidOracleResponse` rather than letting the transfer
+        // through.
+        let price_data = fetch_price(e, &data.oracle_address, target);
 
         let current_timestamp = e.ledger().timestamp();
         let current_ledger = e.ledger().sequence();
