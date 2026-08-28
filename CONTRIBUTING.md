@@ -52,6 +52,7 @@ policies/
   spending-limit-policy/                       wraps OZ's spending_limit policy
 demo/                                          reference code only — not shipped
   modified-ed25519-verifier/                   wallet-popup wrapping pattern, kept for reference
+fee-forwarder/                                 permissioned fee forwarder, wraps OZ's stellar-fee-abstraction
 ```
 
 `cargo +nightly fmt --all -- --check` runs against the whole workspace
