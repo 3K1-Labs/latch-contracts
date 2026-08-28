@@ -4,7 +4,9 @@ extern crate std;
 
 use session_policy::{SessionAccountParams, SessionPolicy};
 use soroban_sdk::{
-    auth::{Context, ContractContext},
+    auth::{
+        Context, ContractContext, ContractExecutable, CreateContractWithConstructorHostFnContext,
+    },
     contract, contractimpl, symbol_short,
     testutils::{Address as _, Ledger},
     vec, Address, Bytes, BytesN, Env, Executable, IntoVal, Map, String, Symbol, Val, Vec,
@@ -16,6 +18,14 @@ use stellar_accounts::{
 };
 
 use super::{LatchSmartAccount, LatchSmartAccountClient};
+
+// A real, tiny, already-existing no-op contract (zero-arg constructor),
+// reused from `factory-contract`'s own testdata rather than building a new
+// fixture — deploying it via `env.deployer().upload_contract_wasm(...)`
+// exercises the real Soroban host deployer, not a mocked one.
+mod dummy_singleton {
+    soroban_sdk::contractimport!(file = "testdata/dummy_singleton.wasm");
+}
 
 #[contract]
 struct MockTargetContract;
@@ -494,6 +504,229 @@ fn session_plus_spending_limit_disallowed_method_rejected_even_when_under_limit(
     );
     let auth_contexts = Vec::from_array(&env, [context]);
     let signatures = create_signatures(&env, &session_signers, vec![&env, rule.id]);
+    let payload_hash = env.crypto().sha256(&Bytes::from_array(&env, &[1u8; 32]));
+
+    env.as_contract(&account_id, || {
+        let _ = smart_account::do_check_auth(&env, &payload_hash, &signatures, &auth_contexts);
+    });
+}
+
+// ################## DEPLOY_CONTRACT: DEPLOYMENT MECHANICS ##################
+//
+// `mock_all_auths()` bypasses `__check_auth` entirely (it never runs), so
+// these tests don't exercise context-rule matching — see the
+// CREATE_CONTRACT AUTHORIZATION section below for that. What `mock_all_auths`
+// does NOT bypass is the actual Soroban host deployer: `deploy_v2` here runs
+// against real uploaded wasm, so these tests prove the deployment mechanics
+// themselves (address derivation, collision handling, discoverability
+// storage) against a real deployed contract, not a mocked one.
+
+fn deployed_wasm_hash(env: &Env) -> BytesN<32> {
+    env.deployer().upload_contract_wasm(dummy_singleton::WASM)
+}
+
+#[test]
+fn deploy_contract_deploys_real_wasm_and_derives_deterministic_address() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let signers = default_signers(&env);
+    let policies = Map::new(&env);
+    let (account_id, client) = register_account(&env, &signers, &policies);
+
+    let wasm_hash = deployed_wasm_hash(&env);
+    let salt = BytesN::from_array(&env, &[7u8; 32]);
+
+    // Predicted independently of `deploy_contract`, from the deployer +
+    // salt alone — this is what "deterministic address" means.
+    let expected_address =
+        env.deployer().with_address(account_id.clone(), salt.clone()).deployed_address();
+
+    let deployed = client.deploy_contract(&wasm_hash, &salt, &vec![&env]);
+
+    assert_eq!(deployed, expected_address);
+    assert_eq!(client.get_deployed_contract_count(), 1);
+    let record = client.get_deployed_contract(&0);
+    assert_eq!(record.address, deployed);
+    assert_eq!(record.wasm_hash, wasm_hash);
+}
+
+#[test]
+fn deploy_contract_records_multiple_deployments_in_order() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let signers = default_signers(&env);
+    let policies = Map::new(&env);
+    let (_account_id, client) = register_account(&env, &signers, &policies);
+
+    let wasm_hash = deployed_wasm_hash(&env);
+
+    let first =
+        client.deploy_contract(&wasm_hash, &BytesN::from_array(&env, &[1u8; 32]), &vec![&env]);
+    let second =
+        client.deploy_contract(&wasm_hash, &BytesN::from_array(&env, &[2u8; 32]), &vec![&env]);
+
+    assert_eq!(client.get_deployed_contract_count(), 2);
+    assert_eq!(client.get_deployed_contract(&0).address, first);
+    assert_eq!(client.get_deployed_contract(&1).address, second);
+}
+
+#[test]
+#[should_panic]
+fn deploy_contract_rejects_reusing_same_salt() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let signers = default_signers(&env);
+    let policies = Map::new(&env);
+    let (_account_id, client) = register_account(&env, &signers, &policies);
+
+    let wasm_hash = deployed_wasm_hash(&env);
+    let salt = BytesN::from_array(&env, &[3u8; 32]);
+
+    client.deploy_contract(&wasm_hash, &salt, &vec![&env]);
+    // Same `(wasm_hash, salt)` from the same deployer derives the same
+    // address as the first deployment — the host itself rejects deploying
+    // over an address that already has a contract, so a caller can't
+    // accidentally collide with or overwrite an already-deployed satellite
+    // by reusing a salt.
+    client.deploy_contract(&wasm_hash, &salt, &vec![&env]);
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #4000)")] // DeployedContractNotFound
+fn get_deployed_contract_rejects_out_of_range_index() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let signers = default_signers(&env);
+    let policies = Map::new(&env);
+    let (_account_id, client) = register_account(&env, &signers, &policies);
+
+    client.get_deployed_contract(&0);
+}
+
+// ################## DEPLOY_CONTRACT: CREATE_CONTRACT AUTHORIZATION #########
+//
+// Same technique as the session-key tests above: `deploy_v2`'s resulting
+// `CreateContractWithCtorHostFn` auth context can't be expressed through
+// `mock_auths`/`MockAuthInvoke` (which only models `ContractFn`-shaped
+// invocations), so these exercise `smart_account::do_check_auth` directly
+// against a hand-built `Context::CreateContractWithCtorHostFn` — the same
+// context `deploy_contract`'s real `deploy_v2` call produces internally, per
+// `get_validated_context_by_id`'s own match arm for it.
+
+fn get_create_context(
+    wasm_hash: BytesN<32>,
+    salt: BytesN<32>,
+    constructor_args: Vec<Val>,
+) -> Context {
+    Context::CreateContractWithCtorHostFn(CreateContractWithConstructorHostFnContext {
+        executable: ContractExecutable::Wasm(wasm_hash),
+        salt,
+        constructor_args,
+    })
+}
+
+#[test]
+fn create_contract_rule_with_matching_signer_authorizes_deployment() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let owner_signers = default_signers(&env);
+    let policies = Map::new(&env);
+    let (account_id, client) = register_account(&env, &owner_signers, &policies);
+
+    let wasm_hash = BytesN::from_array(&env, &[1u8; 32]);
+    let deploy_signer = Signer::Delegated(Address::generate(&env));
+    let deploy_signers = vec![&env, deploy_signer];
+
+    let rule = client.add_context_rule(
+        &ContextRuleType::CreateContract(wasm_hash.clone()),
+        &String::from_str(&env, "deploy"),
+        &None,
+        &deploy_signers,
+        &Map::new(&env),
+    );
+
+    let salt = BytesN::from_array(&env, &[9u8; 32]);
+    let context = get_create_context(wasm_hash, salt, vec![&env]);
+    let auth_contexts = Vec::from_array(&env, [context]);
+    let signatures = create_signatures(&env, &deploy_signers, vec![&env, rule.id]);
+    let payload_hash = env.crypto().sha256(&Bytes::from_array(&env, &[1u8; 32]));
+
+    env.as_contract(&account_id, || {
+        let result = smart_account::do_check_auth(&env, &payload_hash, &signatures, &auth_contexts);
+        assert!(result.is_ok());
+    });
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #3002)")] // UnvalidatedContext
+fn create_contract_rule_rejects_different_wasm_hash() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let owner_signers = default_signers(&env);
+    let policies = Map::new(&env);
+    let (account_id, client) = register_account(&env, &owner_signers, &policies);
+
+    let allowed_wasm_hash = BytesN::from_array(&env, &[1u8; 32]);
+    let deploy_signer = Signer::Delegated(Address::generate(&env));
+    let deploy_signers = vec![&env, deploy_signer];
+
+    let rule = client.add_context_rule(
+        &ContextRuleType::CreateContract(allowed_wasm_hash),
+        &String::from_str(&env, "deploy"),
+        &None,
+        &deploy_signers,
+        &Map::new(&env),
+    );
+
+    // A different wasm hash than the one the rule allows.
+    let other_wasm_hash = BytesN::from_array(&env, &[2u8; 32]);
+    let salt = BytesN::from_array(&env, &[9u8; 32]);
+    let context = get_create_context(other_wasm_hash, salt, vec![&env]);
+    let auth_contexts = Vec::from_array(&env, [context]);
+    let signatures = create_signatures(&env, &deploy_signers, vec![&env, rule.id]);
+    let payload_hash = env.crypto().sha256(&Bytes::from_array(&env, &[1u8; 32]));
+
+    env.as_contract(&account_id, || {
+        let _ = smart_account::do_check_auth(&env, &payload_hash, &signatures, &auth_contexts);
+    });
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #3002)")] // UnvalidatedContext
+fn create_contract_rule_rejects_non_matching_signer() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let owner_signers = default_signers(&env);
+    let policies = Map::new(&env);
+    let (account_id, client) = register_account(&env, &owner_signers, &policies);
+
+    let wasm_hash = BytesN::from_array(&env, &[1u8; 32]);
+    let deploy_signer = Signer::Delegated(Address::generate(&env));
+    let deploy_signers = vec![&env, deploy_signer];
+
+    let rule = client.add_context_rule(
+        &ContextRuleType::CreateContract(wasm_hash.clone()),
+        &String::from_str(&env, "deploy"),
+        &None,
+        &deploy_signers,
+        &Map::new(&env),
+    );
+
+    // A signer that has nothing to do with the rule's signer set.
+    let attacker_signer = Signer::Delegated(Address::generate(&env));
+    let attacker_signers = vec![&env, attacker_signer];
+
+    let salt = BytesN::from_array(&env, &[9u8; 32]);
+    let context = get_create_context(wasm_hash, salt, vec![&env]);
+    let auth_contexts = Vec::from_array(&env, [context]);
+    let signatures = create_signatures(&env, &attacker_signers, vec![&env, rule.id]);
     let payload_hash = env.crypto().sha256(&Bytes::from_array(&env, &[1u8; 32]));
 
     env.as_contract(&account_id, || {
