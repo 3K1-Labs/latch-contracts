@@ -12,17 +12,17 @@
 //!
 //! - The oracle address is fixed at `install` time and cannot be changed
 //!   afterwards.
-//! - A price is only trusted for `MAX_STALENESS_LEDGERS` worth of ledgers
-//!   past its `updated_at` timestamp; anything older is rejected.
-//! - The policy fails closed: an oracle call that reverts, returns a
-//!   malformed `PriceData`, or returns a stale price blocks the transfer
-//!   rather than letting it through.
+//! - A price is only trusted for `MAX_STALENESS_LEDGERS` worth of ledgers past
+//!   its `updated_at` timestamp; anything older is rejected.
+//! - The policy fails closed: an oracle call that reverts, returns a malformed
+//!   `PriceData`, or returns a stale price blocks the transfer rather than
+//!   letting it through.
 #![no_std]
 
 use soroban_sdk::{
     auth::{Context, ContractContext},
-    contract, contracterror, contractimpl, contracttype, panic_with_error, Address, Env, Symbol,
-    TryFromVal, Vec,
+    contract, contracterror, contractimpl, contracttype, panic_with_error, symbol_short, Address,
+    Env, Symbol, TryFromVal, Vec,
 };
 use stellar_accounts::{
     policies::Policy,
@@ -74,7 +74,8 @@ pub struct PriceData {
 #[contracttype]
 #[derive(Clone, Debug, PartialEq)]
 pub struct MultiTokenSpendingLimitAccountParams {
-    /// The maximum amount, in USD (7 decimals, matching the oracle), that
+    /// The maximum amount, in USD (8 decimals, matching `price_usd` and the
+    /// `100_000_000` divisor `enforce` uses to convert into it), that
     /// can be spent across `allowed_tokens` within `period_ledgers`.
     pub spending_limit_usd: i128,
     /// The rolling window size, in ledgers, over which the limit applies.
@@ -133,7 +134,7 @@ const MAX_STALENESS_LEDGERS: u32 = 100;
 /// sequence.
 const LEDGER_CLOSE_TIME_SECS: u64 = 5;
 
-const ORACLE_FN: Symbol = Symbol::short("get_price");
+const ORACLE_FN: Symbol = symbol_short!("get_price");
 
 // ################## HELPERS ##################
 
@@ -255,8 +256,8 @@ impl Policy for MultiTokenSpendingLimitPolicy {
     /// # Errors
     ///
     /// * [`Error::InvalidTransferArgs`] - When the context is not a
-    ///   `Context::Contract` invocation of `transfer`, the amount argument
-    ///   is missing or malformed, or the amount is negative.
+    ///   `Context::Contract` invocation of `transfer`, the amount argument is
+    ///   missing or malformed, or the amount is negative.
     /// * [`Error::TokenNotAllowed`] - When the target contract is not in the
     ///   installed allowlist.
     /// * [`Error::StaleOraclePrice`] - When the oracle's price is older than
@@ -279,7 +280,7 @@ impl Policy for MultiTokenSpendingLimitPolicy {
             panic_with_error!(e, Error::InvalidTransferArgs)
         };
 
-        if fn_name != Symbol::short("transfer") {
+        if fn_name != symbol_short!("transfer") {
             panic_with_error!(e, Error::InvalidTransferArgs)
         }
 

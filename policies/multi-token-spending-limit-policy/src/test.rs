@@ -457,6 +457,6 @@ fn test_enforce_allows_spend_again_after_window_expires() {
 #[test]
 #[should_panic(expected = "Error(Contract, #4)")] // NotInstalled
 fn test_get_policy_data_rejects_not_installed() {
-    let (e, smart_account, client) = setup_env();
+    let (_e, smart_account, client) = setup_env();
     client.get_policy_data(&1, &smart_account);
 }
