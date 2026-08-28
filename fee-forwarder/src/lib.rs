@@ -18,10 +18,9 @@
 //!
 //! - `__constructor(admin, manager, executors)` — sets `admin`, grants
 //!   `manager` the `manager` role, and grants each address in `executors` the
-//!   `executor`
-//!   role. `AccessControl` (below) exposes `grant_role`/ `revoke_role` for
-//!   admin/manager-authorized follow-up changes to either role after
-//!   deployment.
+//!   `executor` role. `AccessControl` (below) exposes `grant_role`/
+//!   `revoke_role` for admin/manager-authorized follow-up changes to either
+//!   role after deployment.
 //! - `forward` — the sponsored-transaction entrypoint. The account signs one
 //!   authorization tree covering `forward()`, with sub-invocations for
 //!   `fee_token.approve(fee_forwarder, max_fee_amount, expiration_ledger)` (if
