@@ -83,8 +83,9 @@ impl LatchSmartAccount {
     /// underlying `create_contract_with_constructor` host function already
     /// requires authorization from the deployer address — since
     /// `with_current_contract` makes that deployer this account itself, the
-    /// host produces a real `CreateContractHostFn`/`CreateContractWithCtorHostFn`
-    /// auth context for `__check_auth` to validate against a stored
+    /// host produces a real
+    /// `CreateContractHostFn`/`CreateContractWithCtorHostFn` auth context
+    /// for `__check_auth` to validate against a stored
     /// `CreateContract(wasm_hash)` context rule. Adding an explicit
     /// self-`require_auth()` here as well would just demand a second,
     /// unrelated authorization (matched as a generic `Context::Contract`
@@ -150,8 +151,8 @@ impl LatchSmartAccount {
     ///
     /// # Errors
     ///
-    /// * [`LatchSmartAccountError::DeployedContractNotFound`] - If no
-    ///   deployed contract is recorded at `index`.
+    /// * [`LatchSmartAccountError::DeployedContractNotFound`] - If no deployed
+    ///   contract is recorded at `index`.
     pub fn get_deployed_contract(e: &Env, index: u32) -> DeployedContract {
         let key = LatchSmartAccountStorageKey::DeployedContract(index);
         e.storage()
