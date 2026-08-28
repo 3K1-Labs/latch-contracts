@@ -44,6 +44,16 @@ impl MockTarget {
     pub fn fail(_e: Env) -> String {
         panic!("target intentionally fails")
     }
+
+    /// Requires `caller`'s own authorization, independent of whoever signed
+    /// the enclosing `forward()` call. Mirrors a real Latch smart-account
+    /// operation forwarded through this contract, which needs the account's
+    /// own signer authorization as a sub-invocation, not just a no-auth call
+    /// like `greet()`.
+    pub fn act_as(e: Env, caller: Address) -> String {
+        caller.require_auth();
+        String::from_str(&e, "authorized")
+    }
 }
 
 struct Setup<'a> {
@@ -362,6 +372,120 @@ fn forward_reverts_fee_collection_when_target_call_fails() {
     assert_eq!(s.token.balance(&s.user), initial_user_balance);
     assert_eq!(s.token.balance(&s.fee_forwarder.address), initial_contract_balance);
     assert_eq!(s.token.allowance(&s.user, &s.fee_forwarder.address), 0);
+}
+
+// ── forward: nested target authorization ────────────────────────────────────
+//
+// Covers the realistic case OZ's own reference suite exercises as
+// `forward_two_subinvokes`: the target call itself requires its own
+// `require_auth()`, folded as a sub-invocation of the same authorization
+// tree `user` signs for `forward()` — not a separate top-level entry.
+
+#[test]
+fn forward_authorizes_target_call_requiring_nested_auth() {
+    let e = Env::default();
+    let s = setup(&e);
+    pre_approve(&s, &e);
+
+    let fn_name = Symbol::new(&e, "act_as");
+    let fn_args: Vec<Val> = vec![&e, s.user.clone().into_val(&e)];
+    let current_ledger = e.ledger().sequence();
+
+    let target_invoke = MockAuthInvoke {
+        contract: &s.target.address,
+        fn_name: "act_as",
+        args: (s.user.clone(),).into_val(&e),
+        sub_invokes: &[],
+    };
+    let user_invoke = MockAuthInvoke {
+        contract: &s.fee_forwarder.address,
+        fn_name: "forward",
+        args: (
+            s.token.address.clone(),
+            s.max_fee_amount,
+            current_ledger,
+            s.target.address.clone(),
+            fn_name.clone(),
+            fn_args.clone(),
+        )
+            .into_val(&e),
+        sub_invokes: &[target_invoke],
+    };
+    let relayer_invoke = MockAuthInvoke {
+        contract: &s.fee_forwarder.address,
+        fn_name: "forward",
+        args: (
+            s.token.address.clone(),
+            s.fee_amount,
+            s.max_fee_amount,
+            current_ledger,
+            s.target.address.clone(),
+            fn_name.clone(),
+            fn_args.clone(),
+            s.user.clone(),
+            s.relayer.clone(),
+        )
+            .into_val(&e),
+        sub_invokes: &[],
+    };
+    let auths = [
+        MockAuth { address: &s.user, invoke: &user_invoke },
+        MockAuth { address: &s.relayer, invoke: &relayer_invoke },
+    ];
+
+    let res: String = s
+        .fee_forwarder
+        .mock_auths(&auths)
+        .forward(
+            &s.token.address,
+            &s.fee_amount,
+            &s.max_fee_amount,
+            &current_ledger,
+            &s.target.address,
+            &fn_name,
+            &fn_args,
+            &s.user,
+            &s.relayer,
+        )
+        .try_into_val(&e)
+        .unwrap();
+
+    assert_eq!(res, String::from_str(&e, "authorized"));
+}
+
+#[test]
+#[should_panic]
+fn forward_rejects_target_call_missing_nested_auth() {
+    let e = Env::default();
+    let s = setup(&e);
+    pre_approve(&s, &e);
+
+    let fn_name = Symbol::new(&e, "act_as");
+    let fn_args: Vec<Val> = vec![&e, s.user.clone().into_val(&e)];
+    let current_ledger = e.ledger().sequence();
+
+    // Same signed tree as `forward_collects_fee_and_invokes_target`, but
+    // without the target's sub-invocation: `user` authorizes `forward()`
+    // itself, yet the nested `caller.require_auth()` inside `act_as` has
+    // nothing to match, so it must fail even though the outer call is
+    // authorized.
+    let (user_invoke, relayer_invoke) = forward_invokes(&s, &e, s.fee_amount, &fn_name, &fn_args);
+    let auths = [
+        MockAuth { address: &s.user, invoke: &user_invoke },
+        MockAuth { address: &s.relayer, invoke: &relayer_invoke },
+    ];
+
+    s.fee_forwarder.mock_auths(&auths).forward(
+        &s.token.address,
+        &s.fee_amount,
+        &s.max_fee_amount,
+        &current_ledger,
+        &s.target.address,
+        &fn_name,
+        &fn_args,
+        &s.user,
+        &s.relayer,
+    );
 }
 
 // ── fee token allowlist: manager-gated ──────────────────────────────────────

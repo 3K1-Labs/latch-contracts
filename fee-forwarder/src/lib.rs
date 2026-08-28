@@ -16,8 +16,9 @@
 //!
 //! # How it works
 //!
-//! - `__constructor(admin, manager, executors)` — sets `admin`, grants `admin`
-//!   the `manager` role, and grants each address in `executors` the `executor`
+//! - `__constructor(admin, manager, executors)` — sets `admin`, grants
+//!   `manager` the `manager` role, and grants each address in `executors` the
+//!   `executor`
 //!   role. `AccessControl` (below) exposes `grant_role`/ `revoke_role` for
 //!   admin/manager-authorized follow-up changes to either role after
 //!   deployment.
