@@ -1325,6 +1325,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "recipient-allowlist-policy"
+version = "0.0.0"
+dependencies = [
+ "soroban-sdk",
+ "stellar-accounts",
+]
+
+[[package]]
 name = "ref-cast"
 version = "1.0.27"
 source = "registry+https://github.com/rust-lang/crates.io-index"
