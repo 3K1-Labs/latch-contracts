@@ -3,8 +3,8 @@ extern crate std;
 
 use soroban_sdk::{
     auth::{Context, ContractContext},
-    testutils::{Address as _, BytesN as _},
-    vec, Address, BytesN, Env, IntoVal, Symbol, Val, Vec,
+    testutils::Address as _,
+    vec, Address, Env, IntoVal, Symbol, Val, Vec,
 };
 use stellar_accounts::smart_account::{ContextRule, ContextRuleType, Signer};
 
