@@ -1,4 +1,4 @@
-﻿//! Oracle-denominated multi-token spending limit policy for Latch smart
+//! Oracle-denominated multi-token spending limit policy for Latch smart
 //! accounts.
 //!
 //! Attach this policy to a `CallContract` context rule to cap, in USD terms,
@@ -353,3 +353,6 @@ impl MultiTokenSpendingLimitPolicy {
         get_policy_data(e, context_rule_id, &smart_account)
     }
 }
+
+#[cfg(test)]
+mod test;
