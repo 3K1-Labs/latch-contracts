@@ -33,8 +33,7 @@ latch-contracts/
 │   └── spending-limit-policy/       # ✅ Spending-limit policy
 ├── demo/                        # Demo/reference code — not shipped, not deployed for real use
 │   └── modified-ed25519-verifier/   # Wallet-signing-popup wrapping pattern, kept for reference
-├── factory-spec.md              # Behavioral spec for the factory
-└── UPGRADE_PATH.md              # Account & factory upgrade path decision
+└── docs/                        # Spec, planning, and process docs — see "Spec and Planning" below
 ```
 
 ## Contracts
@@ -54,7 +53,7 @@ See [`account-factory/README.md`](account-factory/README.md) for full documentat
 
 ### Smart Account — `latch-smart-account/` ✅
 
-OZ-based programmable wallet contract. Implements `CustomAccountInterface`, `SmartAccount`, `ExecutionEntryPoint`, and `Upgradeable`. Initialized with a set of signers and optional policies by the factory. `upgrade()` is self-authorized — gated by the account's own signers via `require_auth()`, the same as every other mutation, not an external admin. See [`UPGRADE_PATH.md`](UPGRADE_PATH.md) for the reasoning.
+OZ-based programmable wallet contract. Implements `CustomAccountInterface`, `SmartAccount`, `ExecutionEntryPoint`, and `Upgradeable`. Initialized with a set of signers and optional policies by the factory. `upgrade()` is self-authorized — gated by the account's own signers via `require_auth()`, the same as every other mutation, not an external admin. See [`docs/UPGRADE_PATH.md`](docs/UPGRADE_PATH.md) for the reasoning.
 
 ### Verifiers — `latch-verifiers/` ✅
 
@@ -128,11 +127,14 @@ stellar contract build                                       # WASM build
 
 ## Spec and Planning
 
-- [`factory-spec.md`](factory-spec.md) — Detailed behavioral specification for the factory contract (validation rules, address derivation formula, canonicalization, worked examples)
-- [`UPGRADE_PATH.md`](UPGRADE_PATH.md) — How the factory and smart account handle upgrades and versioning
-- [`MAINNET_READINESS_CHECKLIST.md`](MAINNET_READINESS_CHECKLIST.md) — What's still open before real funds sit behind these contracts
-- [`ISSUE_TRIAGE_GUIDE.md`](ISSUE_TRIAGE_GUIDE.md) — How we got every open issue here ready for outside contributors; apply the same process in the other Latch repos
-- [`PLAN.md`](PLAN.md) — v1 architecture plan covering all contracts in scope
+Planning, spec, and process docs live in [`docs/`](docs/):
+
+- [`docs/factory-spec.md`](docs/factory-spec.md) — Detailed behavioral specification for the factory contract (validation rules, address derivation formula, canonicalization, worked examples)
+- [`docs/UPGRADE_PATH.md`](docs/UPGRADE_PATH.md) — How the factory and smart account handle upgrades and versioning
+- [`docs/MAINNET_READINESS_CHECKLIST.md`](docs/MAINNET_READINESS_CHECKLIST.md) — What's still open before real funds sit behind these contracts
+- [`docs/OSS_READINESS_CHECKLIST.md`](docs/OSS_READINESS_CHECKLIST.md) — Repo-agnostic checklist for getting any Latch repo ready for outside contributors
+- [`docs/ISSUE_TRIAGE_GUIDE.md`](docs/ISSUE_TRIAGE_GUIDE.md) — How we got every open issue here ready for outside contributors; apply the same process in the other Latch repos
+- [`docs/BUILD.md`](docs/BUILD.md) — Deployment records for contracts currently live on a network
 
 ## Contributing
 

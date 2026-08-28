@@ -15,3 +15,8 @@ memory/
 
 # workspaces
 latch-contracts.code-workspace
+
+# Internal-only notes, not meant for the public repo
+ECOSYSTEM_LANDSCAPE.md
+scf award.md
+REFERENCE_FINDINGS.md
