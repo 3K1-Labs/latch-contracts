@@ -8,21 +8,34 @@
 //! cap is meaningful even when the account spends from several different
 //! tokens.
 //!
+//! # Oracle interface
+//!
+//! The configured oracle must implement the SEP-40 "Price Oracle Consumer"
+//! interface, which [Reflector](https://reflector.network) — the primary
+//! Stellar price oracle — implements:
+//!
+//! - `lastprice(asset: Asset) -> Option<PriceData>`, called with
+//!   `Asset::Stellar(<token address>)` for each allowed token.
+//! - `decimals() -> u32`, queried once at install time and cached, since a
+//!   given oracle deployment's precision doesn't change afterwards. USD amounts
+//!   (`spending_limit_usd`, the values in [`PolicyData`]) are in that oracle's
+//!   own fixed-point convention, not a convention this policy picks.
+//!
 //! # Oracle trust model
 //!
 //! - The oracle address is fixed at `install` time and cannot be changed
 //!   afterwards.
 //! - A price is only trusted for `MAX_STALENESS_LEDGERS` worth of ledgers past
-//!   its `updated_at` timestamp; anything older is rejected.
-//! - The policy fails closed: an oracle call that reverts, returns a malformed
-//!   `PriceData`, or returns a stale price blocks the transfer rather than
+//!   its `timestamp`; anything older is rejected.
+//! - The policy fails closed: an oracle call that reverts, a `lastprice` that
+//!   returns `None`, or a stale price all block the transfer rather than
 //!   letting it through.
 #![no_std]
 
 use soroban_sdk::{
     auth::{Context, ContractContext},
     contract, contracterror, contractimpl, contracttype, panic_with_error, symbol_short, Address,
-    Env, Symbol, TryFromVal, Vec,
+    Env, IntoVal, Symbol, TryFromVal, Vec,
 };
 use stellar_accounts::{
     policies::Policy,
@@ -60,28 +73,47 @@ pub enum Error {
     SpendingLimitExceeded = 8,
     /// The spending history reached `MAX_HISTORY_ENTRIES`.
     HistoryCapacityExceeded = 9,
+    /// The oracle returned no price for the asset (`lastprice` gave `None`),
+    /// or its `decimals()` value can't be used to build a base-10 divisor.
+    InvalidOracleResponse = 10,
 }
 
-/// Price feed shape returned by the configured oracle's `get_price` function.
+/// SEP-40 asset descriptor, as understood by a Reflector-compatible oracle.
+/// Reflector prices either a Stellar contract address directly, or an
+/// external ticker (e.g. `"BTC"`, `"USD"`) on feeds that track off-chain
+/// assets — this policy only ever queries the former, one allowed token at
+/// a time.
+#[contracttype]
+#[derive(Clone, Debug, PartialEq)]
+pub enum Asset {
+    Stellar(Address),
+    Other(Symbol),
+}
+
+/// Price feed shape returned by a SEP-40 / Reflector-compatible oracle's
+/// `lastprice`. Field names and the enclosing `Option` match the oracle's
+/// actual return type so this decodes correctly against a real deployment.
 #[contracttype]
 #[derive(Clone, Debug, PartialEq)]
 pub struct PriceData {
-    pub price_usd: i128,
-    pub updated_at: u64,
+    pub price: i128,
+    pub timestamp: u64,
 }
 
 /// Installation parameters for the multi-token spending limit policy.
 #[contracttype]
 #[derive(Clone, Debug, PartialEq)]
 pub struct MultiTokenSpendingLimitAccountParams {
-    /// The maximum amount, in USD (8 decimals, matching `price_usd` and the
-    /// `100_000_000` divisor `enforce` uses to convert into it), that
-    /// can be spent across `allowed_tokens` within `period_ledgers`.
+    /// The maximum amount that can be spent across `allowed_tokens` within
+    /// `period_ledgers`, denominated in the configured oracle's own
+    /// fixed-point USD convention (i.e. at `oracle.decimals()` precision,
+    /// queried and cached at install time — not a fixed convention this
+    /// policy assumes).
     pub spending_limit_usd: i128,
     /// The rolling window size, in ledgers, over which the limit applies.
     pub period_ledgers: u32,
-    /// The oracle contract queried for each token's USD price. Fixed at
-    /// install time.
+    /// The SEP-40 / Reflector-compatible oracle contract queried for each
+    /// token's USD price. Fixed at install time.
     pub oracle_address: Address,
     /// The set of token contracts this policy tracks spend across.
     pub allowed_tokens: Vec<Address>,
@@ -103,6 +135,10 @@ pub struct PolicyData {
     pub spending_limit_usd: i128,
     pub period_ledgers: u32,
     pub oracle_address: Address,
+    /// `10.pow(oracle.decimals())`, queried once at install time and cached
+    /// so `enforce` doesn't need a second cross-contract call just to
+    /// convert a price into this policy's USD accounting.
+    pub usd_divisor: i128,
     pub allowed_tokens: Vec<Address>,
     pub spending_history: Vec<SpendingEntry>,
     pub cached_total_spent_usd: i128,
@@ -130,11 +166,17 @@ const MAX_STALENESS_LEDGERS: u32 = 100;
 
 /// Approximate ledger close time, in seconds, used to convert
 /// `MAX_STALENESS_LEDGERS` into a timestamp-based staleness bound, since the
-/// oracle reports `updated_at` as a ledger timestamp rather than a ledger
+/// oracle reports `timestamp` as a ledger timestamp rather than a ledger
 /// sequence.
 const LEDGER_CLOSE_TIME_SECS: u64 = 5;
 
-const ORACLE_FN: Symbol = symbol_short!("get_price");
+/// A generous upper bound on a plausible oracle `decimals()` value. Guards
+/// `10i128.checked_pow` against overflow if a misconfigured or malicious
+/// oracle address returns something absurd.
+const MAX_ORACLE_DECIMALS: u32 = 30;
+
+const LASTPRICE_FN: Symbol = symbol_short!("lastprice");
+const DECIMALS_FN: Symbol = symbol_short!("decimals");
 
 // ################## HELPERS ##################
 
@@ -149,6 +191,18 @@ fn get_policy_data(e: &Env, context_rule_id: u32, smart_account: &Address) -> Po
             e.storage().persistent().extend_ttl(&key, POLICY_TTL_THRESHOLD, POLICY_EXTEND_AMOUNT);
         })
         .unwrap_or_else(|| panic_with_error!(e, Error::NotInstalled))
+}
+
+/// Queries the oracle's `decimals()` and converts it into a base-10 divisor,
+/// failing closed if the value can't plausibly be used as one.
+fn fetch_usd_divisor(e: &Env, oracle_address: &Address) -> i128 {
+    let decimals: u32 = e.invoke_contract(oracle_address, &DECIMALS_FN, Vec::new(e));
+    if decimals > MAX_ORACLE_DECIMALS {
+        panic_with_error!(e, Error::InvalidOracleResponse)
+    }
+    10i128
+        .checked_pow(decimals)
+        .unwrap_or_else(|| panic_with_error!(e, Error::InvalidOracleResponse))
 }
 
 /// Evicts spending entries older than the rolling window and returns the
@@ -186,6 +240,11 @@ impl Policy for MultiTokenSpendingLimitPolicy {
     /// Installs the policy on a smart account. Only `CallContract` context
     /// rules are allowed. Requires authorization from the smart account.
     ///
+    /// Queries the oracle's `decimals()` once, so a misconfigured oracle
+    /// address (one that doesn't implement the SEP-40 interface, or that
+    /// reverts) is caught at install time rather than at the first
+    /// `enforce`.
+    ///
     /// # Errors
     ///
     /// * [`Error::InvalidContextRule`] - When the context rule type is not
@@ -194,6 +253,8 @@ impl Policy for MultiTokenSpendingLimitPolicy {
     ///   positive, `period_ledgers` is zero, or `allowed_tokens` is empty.
     /// * [`Error::AlreadyInstalled`] - When the policy was already installed
     ///   for this smart account and context rule.
+    /// * [`Error::InvalidOracleResponse`] - When the oracle's `decimals()`
+    ///   can't be used to build a base-10 divisor.
     fn install(
         e: &Env,
         install_params: Self::AccountParams,
@@ -219,10 +280,13 @@ impl Policy for MultiTokenSpendingLimitPolicy {
             panic_with_error!(e, Error::AlreadyInstalled)
         }
 
+        let usd_divisor = fetch_usd_divisor(e, &install_params.oracle_address);
+
         let data = PolicyData {
             spending_limit_usd: install_params.spending_limit_usd,
             period_ledgers: install_params.period_ledgers,
             oracle_address: install_params.oracle_address,
+            usd_divisor,
             allowed_tokens: install_params.allowed_tokens,
             spending_history: Vec::new(e),
             cached_total_spent_usd: 0,
@@ -260,6 +324,8 @@ impl Policy for MultiTokenSpendingLimitPolicy {
     ///   missing or malformed, or the amount is negative.
     /// * [`Error::TokenNotAllowed`] - When the target contract is not in the
     ///   installed allowlist.
+    /// * [`Error::InvalidOracleResponse`] - When `lastprice` returns `None` for
+    ///   the target token.
     /// * [`Error::StaleOraclePrice`] - When the oracle's price is older than
     ///   `MAX_STALENESS_LEDGERS`.
     /// * [`Error::SpendingLimitExceeded`] - When adding this transfer would
@@ -301,24 +367,27 @@ impl Policy for MultiTokenSpendingLimitPolicy {
             panic_with_error!(e, Error::TokenNotAllowed)
         }
 
-        // Fails closed: if the oracle call reverts or the return value
-        // can't be decoded as `PriceData`, `invoke_contract` panics and the
-        // transfer is rejected rather than allowed through.
-        let price_data: PriceData = e.invoke_contract(
+        // Fails closed: if the oracle call reverts, `invoke_contract`
+        // panics and the transfer is rejected. If it succeeds but has no
+        // price for this asset, `lastprice` returns `None` rather than
+        // reverting, so that case is checked explicitly below.
+        let price_data: Option<PriceData> = e.invoke_contract(
             &data.oracle_address,
-            &ORACLE_FN,
-            soroban_sdk::vec![e, target.to_val()],
+            &LASTPRICE_FN,
+            soroban_sdk::vec![e, Asset::Stellar(target).into_val(e)],
         );
+        let price_data =
+            price_data.unwrap_or_else(|| panic_with_error!(e, Error::InvalidOracleResponse));
 
         let current_timestamp = e.ledger().timestamp();
         let current_ledger = e.ledger().sequence();
 
         let max_staleness_secs = MAX_STALENESS_LEDGERS as u64 * LEDGER_CLOSE_TIME_SECS;
-        if current_timestamp.saturating_sub(price_data.updated_at) > max_staleness_secs {
+        if current_timestamp.saturating_sub(price_data.timestamp) > max_staleness_secs {
             panic_with_error!(e, Error::StaleOraclePrice)
         }
 
-        let amount_usd = amount.saturating_mul(price_data.price_usd).saturating_div(100_000_000);
+        let amount_usd = amount.saturating_mul(price_data.price).saturating_div(data.usd_divisor);
 
         // Clean up old entries outside the rolling window before checking
         // the limit, so the cached total matches the live window.

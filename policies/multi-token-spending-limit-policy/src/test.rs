@@ -10,31 +10,39 @@ use soroban_sdk::{
 use stellar_accounts::smart_account::{ContextRule, ContextRuleType, Signer};
 
 use crate::{
-    MultiTokenSpendingLimitAccountParams, MultiTokenSpendingLimitPolicy,
+    Asset, MultiTokenSpendingLimitAccountParams, MultiTokenSpendingLimitPolicy,
     MultiTokenSpendingLimitPolicyClient, PriceData, LEDGER_CLOSE_TIME_SECS, MAX_STALENESS_LEDGERS,
 };
 
-/// $1.00 at the oracle's 8-decimal fixed-point convention, matching the
-/// `100_000_000` divisor used in `enforce`.
+/// $1.00 at the mock oracle's default 8-decimal fixed-point convention.
 const ONE_USD: i128 = 100_000_000;
 
 // ################## MOCK ORACLE ##################
 
-/// A minimal stand-in for a price oracle. Tests configure the price it
-/// returns via `set_price`; `enforce` calls `get_price` through
-/// `invoke_contract` exactly as it would against a real oracle like
+/// A minimal stand-in for a SEP-40 / Reflector-compatible price oracle.
+/// Tests configure the price (and, where relevant, the decimals) it
+/// returns; `enforce` and `install` call `lastprice`/`decimals` through
+/// `invoke_contract` exactly as they would against a real deployment like
 /// Reflector.
 #[contract]
 struct MockOracle;
 
 #[contractimpl]
 impl MockOracle {
-    pub fn set_price(e: Env, price: PriceData) {
+    pub fn set_price(e: Env, price: Option<PriceData>) {
         e.storage().instance().set(&symbol_short!("price"), &price);
     }
 
-    pub fn get_price(e: Env, _token: Address) -> PriceData {
+    pub fn set_decimals(e: Env, decimals: u32) {
+        e.storage().instance().set(&symbol_short!("decimals"), &decimals);
+    }
+
+    pub fn lastprice(e: Env, _asset: Asset) -> Option<PriceData> {
         e.storage().instance().get(&symbol_short!("price")).unwrap()
+    }
+
+    pub fn decimals(e: Env) -> u32 {
+        e.storage().instance().get(&symbol_short!("decimals")).unwrap_or(8)
     }
 }
 
@@ -73,10 +81,17 @@ fn setup_env<'a>() -> (Env, Address, MultiTokenSpendingLimitPolicyClient<'a>) {
     (e, smart_account, client)
 }
 
-fn setup_oracle(e: &Env, price_usd: i128) -> Address {
+/// Deploys a mock oracle at the standard 8-decimal precision, matching
+/// `ONE_USD`.
+fn setup_oracle(e: &Env, price: i128) -> Address {
+    setup_oracle_with_decimals(e, price, 8)
+}
+
+fn setup_oracle_with_decimals(e: &Env, price: i128, decimals: u32) -> Address {
     let oracle_id = e.register(MockOracle, ());
     let oracle_client = MockOracleClient::new(e, &oracle_id);
-    oracle_client.set_price(&PriceData { price_usd, updated_at: e.ledger().timestamp() });
+    oracle_client.set_decimals(&decimals);
+    oracle_client.set_price(&Some(PriceData { price, timestamp: e.ledger().timestamp() }));
     oracle_id
 }
 
@@ -131,6 +146,20 @@ fn test_install_and_get_policy_data() {
     assert_eq!(data.oracle_address, oracle);
     assert_eq!(data.allowed_tokens, tokens);
     assert_eq!(data.cached_total_spent_usd, 0);
+    // Cached from the oracle's `decimals() == 8` at install time.
+    assert_eq!(data.usd_divisor, ONE_USD);
+}
+
+#[test]
+fn test_install_caches_non_standard_oracle_decimals() {
+    let (e, smart_account, client) = setup_env();
+    let oracle = setup_oracle_with_decimals(&e, 1_000_000, 6);
+    let token = Address::generate(&e);
+
+    let rule = install_policy(&e, &client, &smart_account, &oracle, vec![&e, token], 1_000, 100);
+
+    let data = client.get_policy_data(&rule.id, &smart_account);
+    assert_eq!(data.usd_divisor, 1_000_000);
 }
 
 #[test]
@@ -215,6 +244,18 @@ fn test_install_rejects_double_install() {
     );
 }
 
+#[test]
+#[should_panic(expected = "Error(Contract, #10)")] // InvalidOracleResponse
+fn test_install_rejects_oracle_decimals_too_large() {
+    let (e, smart_account, client) = setup_env();
+    // 31 decimals overflows the `10i128.checked_pow` bound this policy
+    // enforces (`MAX_ORACLE_DECIMALS == 30`).
+    let oracle = setup_oracle_with_decimals(&e, ONE_USD, 31);
+    let token = Address::generate(&e);
+
+    install_policy(&e, &client, &smart_account, &oracle, vec![&e, token], 1_000, 100);
+}
+
 // ################## UNINSTALL ##################
 
 #[test]
@@ -256,6 +297,26 @@ fn test_enforce_accepts_within_limit() {
     let data = client.get_policy_data(&rule.id, &smart_account);
     assert_eq!(data.cached_total_spent_usd, 500);
     assert_eq!(data.spending_history.len(), 1);
+}
+
+#[test]
+fn test_enforce_converts_using_non_standard_oracle_decimals() {
+    let (e, smart_account, client) = setup_env();
+    // A 6-decimal oracle pricing the token at $1.00: 1_000_000 == $1 at
+    // 6 decimals, same real-world price as `ONE_USD` at 8 decimals.
+    let oracle = setup_oracle_with_decimals(&e, 1_000_000, 6);
+    let token = Address::generate(&e);
+
+    let rule =
+        install_policy(&e, &client, &smart_account, &oracle, vec![&e, token.clone()], 1_000, 100);
+
+    let context = transfer_context(&e, &token, 500);
+    client.enforce(&context, &Vec::new(&e), &rule, &smart_account);
+
+    let data = client.get_policy_data(&rule.id, &smart_account);
+    // Same result as the 8-decimal case: 500 tokens at $1.00 == $500,
+    // regardless of the oracle's own precision.
+    assert_eq!(data.cached_total_spent_usd, 500);
 }
 
 #[test]
@@ -329,6 +390,26 @@ fn test_enforce_rejects_negative_amount() {
         install_policy(&e, &client, &smart_account, &oracle, vec![&e, token.clone()], 1_000, 100);
 
     let context = transfer_context(&e, &token, -500);
+    client.enforce(&context, &Vec::new(&e), &rule, &smart_account);
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #10)")] // InvalidOracleResponse
+fn test_enforce_rejects_when_oracle_has_no_price() {
+    let (e, smart_account, client) = setup_env();
+    let oracle = setup_oracle(&e, ONE_USD);
+    let token = Address::generate(&e);
+
+    let rule =
+        install_policy(&e, &client, &smart_account, &oracle, vec![&e, token.clone()], 1_000, 100);
+
+    // The oracle stops reporting a price for this asset entirely —
+    // `lastprice` now returns `None`, as a real oracle would for an asset
+    // it doesn't track (rather than reverting).
+    let oracle_client = MockOracleClient::new(&e, &oracle);
+    oracle_client.set_price(&None);
+
+    let context = transfer_context(&e, &token, 500);
     client.enforce(&context, &Vec::new(&e), &rule, &smart_account);
 }
 
