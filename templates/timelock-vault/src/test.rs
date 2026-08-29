@@ -147,7 +147,8 @@ fn withdraw_after_unlock_succeeds() {
     assert_eq!(client.get_balance(&token_addr), 0);
     // Owner received the funds back.
     let tok = token::TokenClient::new(&e, &token_addr);
-    assert_eq!(tok.balance(&owner), DEPOSIT_AMOUNT * 10); // original mint restored
+    assert_eq!(tok.balance(&owner), DEPOSIT_AMOUNT * 10); // original mint
+                                                          // restored
 }
 
 #[test]

@@ -20,8 +20,8 @@
 //! [`withdraw()`](TimelockVault::withdraw) enforces **both**:
 //!
 //! 1. `owner.require_auth()` — only the owning smart account may withdraw.
-//! 2. `e.ledger().sequence() >= unlock_ledger` — the ledger must be at or
-//!    past the unlock point.
+//! 2. `e.ledger().sequence() >= unlock_ledger` — the ledger must be at or past
+//!    the unlock point.
 //!
 //! Neither check alone is sufficient: owner-only would defeat the timelock,
 //! ledger-only would let anyone drain it.
@@ -122,9 +122,9 @@ impl TimelockVault {
     ///
     /// # Arguments
     ///
-    /// * `owner` — the user's smart-account C-address. Withdrawal goes
-    ///   through the account's full signer/policy stack; the vault only adds
-    ///   the time lock on top.
+    /// * `owner` — the user's smart-account C-address. Withdrawal goes through
+    ///   the account's full signer/policy stack; the vault only adds the time
+    ///   lock on top.
     /// * `unlock_ledger` — the ledger sequence at or after which withdrawal
     ///   becomes possible. Must be strictly greater than the current ledger.
     ///
