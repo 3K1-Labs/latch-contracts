@@ -15,6 +15,7 @@ members = [
   "policies/multi-token-spending-limit-policy",
   "policies/recipient-allowlist-policy",
   "demo/modified-ed25519-verifier",
+  "templates/inheritance-vault",
 ]
 
 [workspace.dependencies]
