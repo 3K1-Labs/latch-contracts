@@ -46,6 +46,7 @@ policies/
   spending-limit-policy/            # thin wrapper around OZ's spending_limit
 demo/                               # reference code only — not shipped, not deployed
   modified-ed25519-verifier/        # wallet-popup wrapping pattern, kept for reference
+fee-forwarder/                      # permissioned fee forwarder, wraps OZ's stellar-fee-abstraction
 ```
 
 One shared `Cargo.lock`, one `stellar-accounts` version for everything —

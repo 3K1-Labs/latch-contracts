@@ -28,7 +28,7 @@ Creates a single `Default` context rule named `"default"` with the provided sign
 fn batch_add_signer(env: &Env, context_rule_id: u32, signers: Vec<Signer>)
 ```
 
-**`upgrade`** — replaces the account's own WASM in place, preserving storage. Requires self-auth — gated by `e.current_contract_address().require_auth()`, the same as every other mutation here. No external admin involved. See [`UPGRADE_PATH.md`](../UPGRADE_PATH.md) for the full reasoning.
+**`upgrade`** — replaces the account's own WASM in place, preserving storage. Requires self-auth — gated by `e.current_contract_address().require_auth()`, the same as every other mutation here. No external admin involved. See [`UPGRADE_PATH.md`](../docs/UPGRADE_PATH.md) for the full reasoning.
 ```rust
 fn upgrade(env: &Env, new_wasm_hash: BytesN<32>, operator: Address)
 ```
