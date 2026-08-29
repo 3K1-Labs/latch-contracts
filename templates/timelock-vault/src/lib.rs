@@ -142,9 +142,7 @@ impl TimelockVault {
 
         // Ensure the config outlives the lock itself.
         e.storage().persistent().extend_ttl(&DataKey::Owner, TTL_THRESHOLD, EXTEND_AMOUNT);
-        e.storage()
-            .persistent()
-            .extend_ttl(&DataKey::UnlockLedger, TTL_THRESHOLD, EXTEND_AMOUNT);
+        e.storage().persistent().extend_ttl(&DataKey::UnlockLedger, TTL_THRESHOLD, EXTEND_AMOUNT);
     }
 
     // ── Deposit ────────────────────────────────────────────────────────
@@ -204,9 +202,7 @@ impl TimelockVault {
 
         // Bump TTLs so the vault stays alive for future withdrawals.
         e.storage().persistent().extend_ttl(&DataKey::Owner, TTL_THRESHOLD, EXTEND_AMOUNT);
-        e.storage()
-            .persistent()
-            .extend_ttl(&DataKey::UnlockLedger, TTL_THRESHOLD, EXTEND_AMOUNT);
+        e.storage().persistent().extend_ttl(&DataKey::UnlockLedger, TTL_THRESHOLD, EXTEND_AMOUNT);
 
         Withdrawn { token, to, amount }.publish(&e);
     }

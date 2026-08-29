@@ -262,10 +262,7 @@ fn deposit_emits_event() {
     // Filter events to only those emitted by the vault contract.
     let vault_events = e.events().all().filter_by_contract(&client.address);
     // The vault should have emitted at least one event (the Deposited event).
-    assert!(
-        !vault_events.events().is_empty(),
-        "expected at least one vault event after deposit"
-    );
+    assert!(!vault_events.events().is_empty(), "expected at least one vault event after deposit");
 }
 
 #[test]
