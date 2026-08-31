@@ -15,10 +15,9 @@
 //!
 //! # How it works
 //!
-//! - `__constructor(owner, beneficiary, inactivity_period_ledgers)` — sets
-//!   the vault's parties and inactivity window, and seeds `last_active_ledger`
-//!   to the deployment ledger (deploying the vault counts as the first
-//!   check-in).
+//! - `__constructor(owner, beneficiary, inactivity_period_ledgers)` — sets the
+//!   vault's parties and inactivity window, and seeds `last_active_ledger` to
+//!   the deployment ledger (deploying the vault counts as the first check-in).
 //! - `check_in` — the only method `owner` needs to call periodically. Resets
 //!   `last_active_ledger` to now. Requires `owner`'s authorization, and is
 //!   itself rejected once the vault has become claimable (see below).
@@ -28,20 +27,20 @@
 //! - `claim(token, to)` — requires `beneficiary`'s authorization and that the
 //!   vault has become claimable. Transfers this contract's entire balance of
 //!   `token` to `to` and returns the amount transferred.
-//! - `is_claimable` / `get_vault_data` — pure reads for clients to poll
-//!   status without guessing at internal storage layout.
+//! - `is_claimable` / `get_vault_data` — pure reads for clients to poll status
+//!   without guessing at internal storage layout.
 //!
 //! # Security Warning: no owner override once claimable
 //!
-//! Once `e.ledger().sequence() >= last_active_ledger + inactivity_period_ledgers`,
-//! the vault is permanently claimable: `check_in`, `update_beneficiary`, and
-//! `extend_inactivity_period` all reject with [`InheritanceVaultError::AlreadyClaimable`]
-//! from that point on, even with valid `owner` authorization. This is
-//! deliberate — without it, `owner` (or anyone who can get `owner` to sign,
-//! e.g. under duress, or an owner surfacing the moment they notice a pending
-//! claim) could grief a legitimate claim in flight by resetting the clock at
-//! the last second. Once triggered, it stays triggered; there is no path
-//! back to owner control for that vault instance.
+//! Once `e.ledger().sequence() >= last_active_ledger +
+//! inactivity_period_ledgers`, the vault is permanently claimable: `check_in`,
+//! `update_beneficiary`, and `extend_inactivity_period` all reject with
+//! [`InheritanceVaultError::AlreadyClaimable`] from that point on, even with
+//! valid `owner` authorization. This is deliberate — without it, `owner` (or
+//! anyone who can get `owner` to sign, e.g. under duress, or an owner surfacing
+//! the moment they notice a pending claim) could grief a legitimate claim in
+//! flight by resetting the clock at the last second. Once triggered, it stays
+//! triggered; there is no path back to owner control for that vault instance.
 //!
 //! # Security Warning: this is a blunt instrument
 //!
@@ -239,8 +238,8 @@ impl InheritanceVault {
     /// # Errors
     ///
     /// * [`InheritanceVaultError::AlreadyClaimable`] - If the inactivity
-    ///   threshold has already been reached — see the module-level "no
-    ///   owner override" warning.
+    ///   threshold has already been reached — see the module-level "no owner
+    ///   override" warning.
     ///
     /// # Events
     ///
@@ -266,8 +265,8 @@ impl InheritanceVault {
     ///
     /// * [`InheritanceVaultError::AlreadyClaimable`] - If the inactivity
     ///   threshold has already been reached.
-    /// * [`InheritanceVaultError::InvalidBeneficiary`] - If `new_beneficiary
-    ///   == owner`.
+    /// * [`InheritanceVaultError::InvalidBeneficiary`] - If `new_beneficiary ==
+    ///   owner`.
     ///
     /// # Events
     ///
@@ -303,7 +302,8 @@ impl InheritanceVault {
     /// # Events
     ///
     /// * topics - `["inactivity_period_updated", owner: Address]`
-    /// * data - `[old_inactivity_period_ledgers: u32, new_inactivity_period_ledgers: u32]`
+    /// * data - `[old_inactivity_period_ledgers: u32,
+    ///   new_inactivity_period_ledgers: u32]`
     pub fn extend_inactivity_period(e: &Env, new_inactivity_period_ledgers: u32) {
         let mut data = load(e);
         data.owner.require_auth();
@@ -335,8 +335,8 @@ impl InheritanceVault {
     ///
     /// * [`InheritanceVaultError::NotYetClaimable`] - If the inactivity
     ///   threshold has not been reached.
-    /// * [`InheritanceVaultError::NoFundsToClaim`] - If this contract holds
-    ///   no balance of `token`.
+    /// * [`InheritanceVaultError::NoFundsToClaim`] - If this contract holds no
+    ///   balance of `token`.
     ///
     /// # Events
     ///
