@@ -47,12 +47,23 @@ jobs:
         if: needs.changes.outputs.code == 'true'
         uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
-          toolchain: nightly
+          # Pinned to a dated nightly rather than the floating `nightly` tag.
+          # `fmt` only enforces style (via rustfmt.toml's unstable_features),
+          # it doesn't affect the actual build/test toolchain (stable,
+          # elsewhere in this workflow) — but a floating nightly means the
+          # exact same, unchanged source can pass today and fail tomorrow as
+          # upstream rustfmt's formatting heuristics drift, with no code
+          # change on our end (this bit us: main's fmt check broke between
+          # two merges with zero diff to the file that started failing).
+          # Bump this date deliberately when a newer nightly's formatting
+          # behavior is actually wanted, rather than letting it drift
+          # invisibly.
+          toolchain: nightly-2026-07-09
           components: rustfmt
 
       - name: Check format (whole workspace)
         if: needs.changes.outputs.code == 'true'
-        run: cargo +nightly fmt --all -- --check
+        run: cargo +nightly-2026-07-09 fmt --all -- --check
 
   # Computes the current workspace member list straight from `Cargo.toml` via
   # `cargo metadata`, so `build-and-test`'s matrix always covers every crate
