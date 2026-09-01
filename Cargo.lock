@@ -1198,6 +1198,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "p256-verifier"
+version = "0.0.0"
+dependencies = [
+ "p256",
+ "soroban-sdk",
+ "stellar-accounts",
+]
+
+[[package]]
 name = "parameter-scoped-policy"
 version = "0.0.0"
 dependencies = [

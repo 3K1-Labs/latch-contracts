@@ -3,7 +3,7 @@
 
 ## Overview
 
-Soroban smart contracts for the Latch auth layer. Provides deterministic smart account creation with support for Ed25519 and WebAuthn signers.
+Soroban smart contracts for the Latch auth layer. Provides deterministic smart account creation with support for Ed25519, raw P-256, and WebAuthn signers.
 
 Latch accounts are Soroban smart accounts — programmable wallets that replace private-key-only authorization with flexible multi-signer, multi-policy authorization. Users can sign transactions with a Phantom wallet, a MetaMask wallet, a passkey (Face ID, Touch ID, fingerprint), or any combination of the three.
 
@@ -25,7 +25,8 @@ latch-contracts/
 ├── latch-smart-account/         # ✅ Smart account contract
 ├── latch-verifiers/              # Verifier contracts
 │   ├── ed25519-verifier/         # ✅ Ed25519 — raw hash, no wrapping
-│   └── webauthn-verifier/
+│   ├── p256-verifier/             # ✅ P-256 — raw hash, no WebAuthn ceremony
+│   └── webauthn-verifier/         # ✅ P-256 with a WebAuthn ceremony
 ├── policies/                    # Policy contracts
 │   ├── threshold-policy/            # ✅ Simple (unweighted) threshold policy
 │   ├── weighted-threshold-policy/   # ✅ Weighted threshold policy
@@ -65,6 +66,7 @@ Stateless singleton contracts that verify signatures on behalf of smart accounts
 | Contract | Signer type | Key format | Status |
 |---|---|---|---|
 | `ed25519-verifier` | Any Ed25519 signer — native keys, SDK-integrated wallets | 32-byte Ed25519 public key | ✅ Implemented |
+| `p256-verifier` | Raw P-256 session or external signers | 65-byte uncompressed SEC1 P-256 key | ✅ Implemented |
 | `webauthn-verifier` | Passkeys, Face ID, Touch ID, YubiKey | 65-byte P-256 key + credential ID | ✅ Implemented |
 
 ### Threshold Policy — `policies/threshold-policy/` ✅
