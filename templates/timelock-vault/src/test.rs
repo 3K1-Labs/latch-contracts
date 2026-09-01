@@ -315,21 +315,64 @@ fn partial_withdraw_leaves_remainder() {
 // E2E deployment via smart account (#39)
 // ────────────────────────────────────────────────────────────────────────────
 
+mod timelock_vault_wasm {
+    soroban_sdk::contractimport!(file = "testdata/timelock_vault.wasm");
+}
+
 #[test]
-#[ignore] // TODO: unblock when #39 (CreateContract-gated entrypoint) lands.
 fn e2e_deploy_via_smart_account() {
-    // This test will deploy the timelock-vault WASM through the smart
-    // account's yet-to-be-implemented `create_contract` entrypoint (#39),
-    // then exercise deposit + time-gated withdrawal end-to-end.
-    //
-    // Outline:
+    let e = Env::default();
+    e.mock_all_auths();
+
     // 1. Register a LatchSmartAccount with a default signer.
+    let owner_signers = soroban_sdk::vec![
+        &e,
+        stellar_accounts::smart_account::Signer::Delegated(Address::generate(&e))
+    ];
+    let policies = soroban_sdk::Map::<Address, soroban_sdk::Val>::new(&e);
+    let account_id = e.register(smart_account::LatchSmartAccount, (owner_signers, policies));
+    let smart_account_client = smart_account::LatchSmartAccountClient::new(&e, &account_id);
+
     // 2. Upload the timelock-vault WASM to the environment.
-    // 3. Call smart_account.create_contract(wasm_hash, salt, init_args).
+    let wasm_hash = e.deployer().upload_contract_wasm(timelock_vault_wasm::WASM);
+
+    // 3. Call smart_account.deploy_contract(wasm_hash, salt, init_args).
+    let salt = soroban_sdk::BytesN::from_array(&e, &[1u8; 32]);
+    let unlock_ledger = 1_000u32;
+    let init_args = (&account_id, unlock_ledger).into_val(&e);
+
+    // Start at ledger 100 so UNLOCK_LEDGER is in the future.
+    e.ledger().with_mut(|li| {
+        li.sequence_number = 100;
+    });
+
+    let vault_address = smart_account_client.deploy_contract(&wasm_hash, &salt, &init_args);
+    let vault_client = TimelockVaultClient::new(&e, &vault_address);
+
     // 4. Verify the vault is owned by the smart account.
+    assert_eq!(vault_client.get_owner(), account_id);
+    assert_eq!(vault_client.get_unlock_ledger(), unlock_ledger);
+
     // 5. Deposit, advance ledger, withdraw.
-    //
-    // Cannot be implemented until #39 provides the `create_contract`
-    // entrypoint on `latch-smart-account`.
-    todo!("Implement once #39 lands");
+    let admin = Address::generate(&e);
+    let token_id = e.register_stellar_asset_contract_v2(admin);
+    let sac_client = token::StellarAssetClient::new(&e, &token_id.address());
+
+    // Mint directly to the smart account.
+    sac_client.mint(&account_id, &10_000_000);
+
+    vault_client.deposit(&account_id, &token_id.address(), &10_000_000);
+    assert_eq!(vault_client.get_balance(&token_id.address()), 10_000_000);
+
+    // Withdraw fails before unlock
+    let res = vault_client.try_withdraw(&token_id.address(), &10_000_000, &account_id);
+    assert!(res.is_err());
+
+    // Advance past unlock
+    e.ledger().with_mut(|li| {
+        li.sequence_number = unlock_ledger + 1;
+    });
+
+    vault_client.withdraw(&token_id.address(), &10_000_000, &account_id);
+    assert_eq!(vault_client.get_balance(&token_id.address()), 0);
 }
