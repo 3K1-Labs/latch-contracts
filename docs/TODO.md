@@ -31,7 +31,14 @@ Tracking known gaps and follow-ups.
 
 ## CI
 
-- [ ] **CI never verifies the WASM build actually succeeds.** `rust.yml` only
+- [x] **CI never verifies the WASM build actually succeeds.** Closed
+      2026-09-02: `rust.yml` now has a `wasm-build` job that runs
+      `stellar contract build` over the whole workspace (prebuilt stellar-cli
+      via the `stellar/stellar-cli` action). The OZ same-name-functions
+      concern below turned out not to apply — stellar-cli builds each
+      workspace member as a separate `cargo rustc --manifest-path`
+      invocation, verified across all 19 crates locally. Original note kept
+      for context: `rust.yml` only
       runs `cargo build`/`cargo test` (native/default target) — never
       `stellar contract build`. Tests don't need a compiled WASM artifact to
       run (`soroban-sdk`'s test utilities simulate the host in-process), so
@@ -63,9 +70,8 @@ not yet drafted or filed.
 - [ ] **Draft contribution issues for the remaining verifier kinds** from OZ's EIP-7913-inspired
       `(verifier_address, public_key)` model (`Verifier` trait: `verify(e, hash, key_data,
       sig_data) -> bool`). None of these have issues yet:
-      - Secp256r1 (raw ECDSA, e.g. secure-enclave signing) — **not** redundant with
-        `webauthn-verifier`, which parses full WebAuthn assertion format (authenticator data +
-        client-data JSON), not raw P-256 signatures.
+      - ~~Secp256r1 (raw ECDSA, e.g. secure-enclave signing)~~ — shipped as
+        `latch-verifiers/p256-verifier` (#78, 2026-08); follow-ups tracked in #19/#22/#23.
       - BLS
       - RSA (institutional keys)
       - ZK-proof-based signing
