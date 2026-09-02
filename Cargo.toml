@@ -18,6 +18,7 @@ members = [
   "policies/recipient-allowlist-policy",
   "demo/modified-ed25519-verifier",
   "fee-forwarder",
+  "templates/timelock-vault",
 ]
 
 [workspace.dependencies]
