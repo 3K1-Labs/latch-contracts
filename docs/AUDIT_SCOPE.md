@@ -1,9 +1,9 @@
 # Audit Scope — Latch Contracts v1
 
 Scope statement for the external security audit that gates mainnet. Decided 2026-09-02: **the
-audit covers everything on `main` as it stands**, at a commit to be tagged `audit-v1` once
-[PR #82](https://github.com/3K1-Labs/latch-contracts/pull/82) merges. Nothing else lands on
-`main` between that tag and the audit report except fixes for audit findings.
+audit covers everything on `main` as it stands**, at the commit tagged `audit-v1` (this
+document is part of that commit). Nothing else lands on `main` between that tag and the audit
+report except fixes for audit findings.
 
 ## In scope
 
