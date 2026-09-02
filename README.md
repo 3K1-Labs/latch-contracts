@@ -3,9 +3,9 @@
 
 ## Overview
 
-Soroban smart contracts for the Latch auth layer. Provides deterministic smart account creation with support for Ed25519 and WebAuthn signers.
+Soroban smart contracts for the Latch auth layer. Provides deterministic smart account creation with support for Ed25519, raw P-256, raw secp256k1, and WebAuthn signers.
 
-Latch accounts are Soroban smart accounts — programmable wallets that replace private-key-only authorization with flexible multi-signer, multi-policy authorization. Users can sign transactions with a Phantom wallet, a MetaMask wallet, a passkey (Face ID, Touch ID, fingerprint), or any combination of the three.
+Latch accounts are Soroban smart accounts — programmable wallets that replace private-key-only authorization with flexible multi-signer, multi-policy authorization. Users can sign transactions with Ed25519 keys, raw P-256 keys, raw secp256k1 keys, passkeys, or any supported combination. Wallet-specific signing flows require separate client integration.
 
 The system is built on the [OpenZeppelin Stellar Contracts](https://github.com/OpenZeppelin/stellar-contracts) smart account framework.
 
@@ -25,7 +25,9 @@ latch-contracts/
 ├── latch-smart-account/         # ✅ Smart account contract
 ├── latch-verifiers/              # Verifier contracts
 │   ├── ed25519-verifier/         # ✅ Ed25519 — raw hash, no wrapping
-│   └── webauthn-verifier/
+│   ├── p256-verifier/             # ✅ P-256 — raw hash, no WebAuthn ceremony
+│   ├── secp256k1-verifier/        # ✅ secp256k1 — raw hash, recover and compare
+│   └── webauthn-verifier/         # ✅ P-256 with a WebAuthn ceremony
 ├── policies/                    # Policy contracts
 │   ├── threshold-policy/            # ✅ Simple (unweighted) threshold policy
 │   ├── weighted-threshold-policy/   # ✅ Weighted threshold policy
@@ -33,6 +35,9 @@ latch-contracts/
 │   └── spending-limit-policy/       # ✅ Spending-limit policy
 ├── demo/                        # Demo/reference code — not shipped, not deployed for real use
 │   └── modified-ed25519-verifier/   # Wallet-signing-popup wrapping pattern, kept for reference
+├── fee-forwarder/                # ✅ Permissioned fee forwarder for gasless (sponsored) transactions
+├── factory-spec.md              # Behavioral spec for the factory
+└── UPGRADE_PATH.md              # Account & factory upgrade path decision
 └── docs/                        # Spec, planning, and process docs — see "Spec and Planning" below
 ```
 
@@ -62,7 +67,15 @@ Stateless singleton contracts that verify signatures on behalf of smart accounts
 | Contract | Signer type | Key format | Status |
 |---|---|---|---|
 | `ed25519-verifier` | Any Ed25519 signer — native keys, SDK-integrated wallets | 32-byte Ed25519 public key | ✅ Implemented |
+| `p256-verifier` | Raw P-256 session or external signers | 65-byte uncompressed SEC1 P-256 key | ✅ Implemented |
+| `secp256k1-verifier` | Raw secp256k1 external signers | 65-byte uncompressed SEC1 secp256k1 key | ✅ Verifier implemented; wallet integration unvalidated |
 | `webauthn-verifier` | Passkeys, Face ID, Touch ID, YubiKey | 65-byte P-256 key + credential ID | ✅ Implemented |
+
+`secp256k1-verifier` checks a low-S `r[32] || s[32] || recovery_id[1]`
+signature over the raw Latch auth digest. The recovery ID must be raw `0` or
+`1`; clients receiving Ethereum-style `27`/`28` values must normalize them
+off-chain. This does not provide EIP-191, `personal_sign`, or automatic MetaMask
+compatibility.
 
 ### Threshold Policy — `policies/threshold-policy/` ✅
 
@@ -79,6 +92,10 @@ Restricts a context rule's signers to an allow-listed set of contract function n
 ### Spending Limit Policy — `policies/spending-limit-policy/` ✅
 
 Thin wrapper around OZ's `stellar-accounts` spending-limit policy. Enforces a rolling spend cap per context rule.
+
+### Fee Forwarder — `fee-forwarder/` ✅
+
+Singleton, permissioned contract that lets `latch-relayer` sponsor gasless transactions for Latch accounts holding no XLM. Thin wrapper around OZ's `stellar-fee-abstraction` helpers, following OZ's `examples/fee-forwarder-permissioned` reference. An account signs one authorization tree covering `forward()`, with sub-invocations for the fee-token `approve` and the actual target call; the relayer (gated to the `executor` role) fills in the real `fee_amount` (`<=` the user's signed cap) and submits, paying the network's XLM fee itself. The contract collects the fee and forwards the target call atomically — either both succeed or the whole transaction reverts. `enable_fee_token`/`disable_fee_token`/`sweep_tokens` are manager-gated. Off-chain quoting, holding the executor credential, and submitting `forward()` transactions are out of scope here — tracked in the companion `latch-relayer` issue.
 
 ### Demo — `demo/` ⚠️
 

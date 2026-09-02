@@ -6,6 +6,8 @@ members = [
   "account-factory/contracts/dummy-account",
   "account-factory/contracts/dummy-singleton",
   "latch-verifiers/ed25519-verifier",
+  "latch-verifiers/p256-verifier",
+  "latch-verifiers/secp256k1-verifier",
   "latch-verifiers/webauthn-verifier",
   "policies/threshold-policy",
   "policies/weighted-threshold-policy",
@@ -15,6 +17,9 @@ members = [
   "policies/multi-token-spending-limit-policy",
   "policies/recipient-allowlist-policy",
   "demo/modified-ed25519-verifier",
+  
+  "fee-forwarder",
+  "templates/timelock-vault",
   "templates/vesting-schedule",
 ]
 
@@ -22,6 +27,10 @@ members = [
 soroban-sdk = "26.1.0"
 stellar-accounts = "=0.7.2"
 stellar-contract-utils = "=0.7.2"
+stellar-fee-abstraction = "=0.7.2"
+stellar-access = "=0.7.2"
+stellar-macros = "=0.7.2"
+stellar-tokens = "=0.7.2"
 
 [profile.release]
 opt-level = "z"
