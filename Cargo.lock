@@ -1217,6 +1217,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "p256-verifier"
+version = "0.0.0"
+dependencies = [
+ "p256",
+ "soroban-sdk",
+ "stellar-accounts",
+]
+
+[[package]]
 name = "parameter-scoped-policy"
 version = "0.0.0"
 dependencies = [
@@ -1448,6 +1457,15 @@ dependencies = [
  "generic-array",
  "subtle",
  "zeroize",
+]
+
+[[package]]
+name = "secp256k1-verifier"
+version = "0.0.0"
+dependencies = [
+ "k256",
+ "soroban-sdk",
+ "stellar-accounts",
 ]
 
 [[package]]
@@ -2059,6 +2077,15 @@ checksum = "7e689342a48d2ea927c87ea50cabf8594854bf940e9310208848d680d668ed85"
 dependencies = [
  "num-conv",
  "time-core",
+]
+
+[[package]]
+name = "timelock-vault"
+version = "0.0.0"
+dependencies = [
+ "smart-account",
+ "soroban-sdk",
+ "stellar-accounts",
 ]
 
 [[package]]
