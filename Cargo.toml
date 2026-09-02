@@ -7,6 +7,7 @@ members = [
   "account-factory/contracts/dummy-singleton",
   "latch-verifiers/ed25519-verifier",
   "latch-verifiers/p256-verifier",
+  "latch-verifiers/secp256k1-verifier",
   "latch-verifiers/webauthn-verifier",
   "policies/threshold-policy",
   "policies/weighted-threshold-policy",
