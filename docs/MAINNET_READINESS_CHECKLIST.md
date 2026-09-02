@@ -12,29 +12,52 @@ stale and have been rewritten or moved to "Closed" at the bottom.
 
 **One-line status:** code readiness has moved a lot, gate readiness has not. No contract is
 deployed anywhere with a recorded artifact, the audit has not started and its scope is still
-growing, and one fund-lockout bug (#77) is open in the core account. The critical path, in order:
-fix #77 → freeze the v1 crate set → audit → deploy and record.
+growing, and the signer-removal lockout (#77, verified real) is by recorded decision mitigated
+client-side, not on-chain — and that client-side mitigation does not exist yet. The critical path,
+in order: tag `audit-v1` on `main` after PR #82 → audit (scope: `AUDIT_SCOPE.md`) → deploy and
+record → ship latch-mobile#69 before opening to real funds.
 
 ---
 
 ## 1. Security & Audit — the actual blocker
 
-- [ ] **Fix [#77](https://github.com/3K1-Labs/latch-contracts/issues/77) — removing the last
-      signer from a rule can silently lock it forever.** Removing the lone signer from a rule that
-      has only `session-policy` or `spending-limit-policy` attached succeeds (OZ's core check only
-      requires "at least one signer *or* one policy"), then every future call against that rule
-      fails the policy's own zero-signer guard. If it was the account's only signer, the account is
-      bricked with no bootstrap path back in. A contributor volunteered 2026-09-01; no PR yet as of
-      this revision. This is a core-account fund-lockout bug and must land before the audit
-      snapshot, not after.
-- [ ] **Freeze the audit / v1 deploy scope.** The lineup the original checklist described no
-      longer exists. Since `451ffcf` the workspace gained `p256-verifier`, `secp256k1-verifier`,
-      `parameter-scoped-policy`, `recipient-allowlist-policy`,
-      `multi-token-spending-limit-policy`, `fee-forwarder`, the account's `deploy_contract`
-      entrypoint, and two `templates/*` contracts — and four open PRs (#81 recurring-escrow,
-      #72 inheritance-vault, #55 timelock-policy, #52 rate-limit-policy) would add more. An
-      auditor needs a fixed target. Decide explicitly which crates are in the v1 mainnet deploy
-      set, merge or defer the open PRs accordingly, and tag the commit the audit runs against.
+- [ ] **Settle [#77](https://github.com/3K1-Labs/latch-contracts/issues/77) in line with the
+      recorded #38 decision.** The lockout is real — verified 2026-09-02 against both OZ 0.7.2 and
+      `LatchSmartAccount` on `main`: OZ's `validate_signers_and_policies` only requires "at least
+      one signer *or* one policy", OZ's own test `remove_signer_with_policy_present_success`
+      asserts a rule may end up with zero signers, and on Latch's account removing the sole signer
+      from a rule carrying `spending-limit-policy` succeeds, after which every authorization
+      against that rule fails (`UnauthorizedSigner` for the old key, `NotAllowed` with no key).
+      But the **decision already on record** (issue #38 / PR #53, 2026-08-27) is that on-chain
+      enforcement of signer-change safety is *shelved*: overriding `SmartAccount`'s core trait
+      methods is the most sensitive change in the system and repeatedly surfaced adjacent
+      bypasses during review, so it stays parked on `experimental` until an external audit, and
+      the near-term mitigation is a **client-side confirmation warning**, with the "only protects
+      callers using Latch's own UI" limitation explicitly accepted. #77 (filed 2026-08-31, after
+      that decision) asks for a new on-chain check in a `remove_signer_checked` that doesn't exist
+      on `main`, and a contributor volunteered on 2026-09-01. Actions:
+      - [x] Rescope #77 to match the decision — done 2026-09-02: status comment, retitled,
+        relabelled `blocked`/`documentation`, `help wanted` removed, volunteer redirected.
+      - [x] File the UI warning itself — done 2026-09-02 as
+        [latch-mobile#69](https://github.com/3K1-Labs/latch-mobile/issues/69), cross-linked from
+        [latch-mobile#68](https://github.com/3K1-Labs/latch-mobile/issues/68) (real on-chain
+        removal, currently a local-state mock). `latch-web-extension` has no removal flow at all,
+        so nothing to file there yet; its self-management UI issue (#42) inherits this when it
+        starts. Net today: Latch's own clients can't remove signers on-chain, so exposure is
+        limited to direct contract callers — but **latch-mobile#69 must ship before mainnet**;
+        it is the accepted mitigation.
+      - [x] Audit scope vs PR #53 — decided 2026-09-02: the audit covers `main` as-is; PR #53
+        stays on `experimental` until after launch. `AUDIT_SCOPE.md` asks the auditor whether OZ
+        has a contract-level answer since. Post-launch, `experimental` should be reset to `main`
+        and #53's commit (`4711290`) cherry-picked back: a dry run shows conflicts only in
+        `latch-smart-account/src/lib.rs` and `src/test.rs` (both #53 and #71 define
+        `LatchSmartAccountError`).
+- [x] **Freeze the audit / v1 deploy scope — decided 2026-09-02.** Scope is *everything on
+      `main`* as it stands, written up in [`AUDIT_SCOPE.md`](AUDIT_SCOPE.md). Remaining
+      mechanics: tag `audit-v1` on `main` once PR #82 merges, and hold the four open PRs (#81
+      recurring-escrow, #72 inheritance-vault, #55 timelock-policy, #52 rate-limit-policy) until
+      the audit report is in — they add new contracts, so merging them mid-audit widens the
+      target. Nothing else lands on `main` before the report except audit-finding fixes.
 - [ ] **External security audit of Latch's own code.** `SECURITY.md` says this plainly: *"This
       project has not yet undergone an external security audit... do not deploy it to hold real
       value without your own independent review."* Nothing else on this list matters if this box
@@ -88,27 +111,17 @@ discipline `deployments/README.md` describes, not a "redeploy" of something stal
       a Latch smart account?), document it, and make sure the relayer's executor key rotation
       story exists before it's needed.
 
-## 3. Signer / verifier scope — decide what v1 actually supports
+## 3. Signer / verifier scope — decided 2026-09-02
 
-The original question ("is Ed25519 + WebAuthn sufficient?") is stale: the shipped lineup is now
-**four** verifiers. But no decision has been recorded, and two facts make it non-trivial:
+v1 ships all four verifiers as deployed singletons. The factory creates accounts with `Ed25519`
+or `WebAuthn` signers only; raw P-256 and secp256k1 keys are attached after creation through the
+account's own signer management. secp256k1 has no validated wallet flow and that is accepted.
+Recorded as "known and accepted" in `AUDIT_SCOPE.md`. Not blockers, still worth doing:
 
-- [ ] **The factory only creates accounts with `Ed25519` or `WebAuthn` signers.** Its
-      `SignerKind` enum has exactly those two variants, so a raw P-256 or secp256k1 key can't be
-      part of account creation — only added afterward through the account's own signer
-      management (`Signer::External(verifier, key_data)` is generic). Decide whether that's the
-      intended v1 shape (P-256/secp256k1 as *add-on* signers only) or whether the factory needs
-      the extra variants before launch. Either is defensible; leaving it implicit isn't.
-- [ ] **Raw P-256 session keys have open work.** Initiative
-      [#19](https://github.com/3K1-Labs/latch-contracts/issues/19) is open with
-      [#22](https://github.com/3K1-Labs/latch-contracts/issues/22) (end-to-end session
-      authorization coverage) and [#23](https://github.com/3K1-Labs/latch-contracts/issues/23)
-      (lifecycle and threat-model docs) unresolved. If `p256-verifier` is in the v1 deploy set,
-      both should close first; if it isn't, say so and defer.
-- [ ] **secp256k1 wallet integration is unvalidated.** The README says as much: the verifier is
-      implemented, but no real wallet flow has exercised it. Deploying an unused singleton is
-      cheap, but it's still audit surface. Include it in v1 deliberately or leave it out
-      deliberately.
+- [ ] **Raw P-256 session-key follow-ups** — [#22](https://github.com/3K1-Labs/latch-contracts/issues/22)
+      (end-to-end session authorization coverage) and [#23](https://github.com/3K1-Labs/latch-contracts/issues/23)
+      (lifecycle and threat-model docs). #23 in particular would help the auditor; neither
+      changes contract code.
 
 ## 4. Architecture decisions still genuinely open
 
@@ -136,6 +149,11 @@ The original question ("is Ed25519 + WebAuthn sufficient?") is stale: the shippe
 
 ## 5. CI / test hardening
 
+- [ ] **Three wrapper crates have no tests of their own** — `threshold-policy`,
+      `weighted-threshold-policy`, `spending-limit-policy`. Spending-limit is exercised through
+      `latch-smart-account`'s tests; the two threshold crates are exercised nowhere in the
+      workspace. Cheap to add (PR #53 on `experimental` already has tests for both threshold
+      crates that could be lifted without the enforcement code). Disclosed in `AUDIT_SCOPE.md`.
 - [ ] **No enforced test coverage threshold** (OZ uses `cargo llvm-cov --fail-under-lines 90`; we
       have nothing equivalent). Decide whether to adopt one before or shortly after mainnet.
 - [ ] **No dependency audit in CI** — no `cargo-deny` or `cargo-audit` config exists. Cheap to add;
