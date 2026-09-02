@@ -1,18 +1,22 @@
 //! Vesting schedule personal contract template for Latch smart accounts.
 //!
-//! A lightweight satellite contract owned by a user's smart account (or account address)
-//! that holds SEP-41 tokens and releases them over time according to a linear schedule,
-//! with an optional cliff.
+//! A lightweight satellite contract owned by a user's smart account (or account
+//! address) that holds SEP-41 tokens and releases them over time according to a
+//! linear schedule, with an optional cliff.
 //!
 //! # Architecture & Trust Model
 //!
-//! - **Personal contract**: Deployed per schedule, owned by the beneficiary's smart account.
-//! - **Single-token design**: Configured with a dedicated token address at construction time.
-//! - **Owner authorization**: Only the configured `owner` address can invoke `claim`.
-//! - **Non-revocable**: Once deployed and funded, vesting is unconditional and cannot be
-//!   cancelled or redirected by a third party.
-//! - **Exact arithmetic**: Uses wide integer multiplication to guarantee that rounding
-//!   leaves zero residual dust upon schedule completion, with no overflow up to `i128::MAX`.
+//! - **Personal contract**: Deployed per schedule, owned by the beneficiary's
+//!   smart account.
+//! - **Single-token design**: Configured with a dedicated token address at
+//!   construction time.
+//! - **Owner authorization**: Only the configured `owner` address can invoke
+//!   `claim`.
+//! - **Non-revocable**: Once deployed and funded, vesting is unconditional and
+//!   cannot be cancelled or redirected by a third party.
+//! - **Exact arithmetic**: Uses wide integer multiplication to guarantee that
+//!   rounding leaves zero residual dust upon schedule completion, with no
+//!   overflow up to `i128::MAX`.
 #![no_std]
 
 use soroban_sdk::{
@@ -69,7 +73,8 @@ pub enum VestingScheduleError {
     InvalidAmount = 2,
     /// `start_ledger` must be strictly less than `end_ledger`.
     InvalidLedgerRange = 3,
-    /// `cliff_ledger` must be between `start_ledger` and `end_ledger` inclusive.
+    /// `cliff_ledger` must be between `start_ledger` and `end_ledger`
+    /// inclusive.
     InvalidCliffLedger = 4,
     /// The vesting contract has not been initialized.
     NotInitialized = 5,
@@ -145,15 +150,20 @@ impl VestingScheduleContract {
     /// * `token` - The SEP-41 token contract being vested.
     /// * `total_amount` - The total token amount to vest (must be > 0).
     /// * `start_ledger` - The ledger sequence where vesting starts.
-    /// * `cliff_ledger` - Optional cliff ledger (must be `start_ledger <= cliff <= end_ledger`).
-    /// * `end_ledger` - The ledger sequence where vesting completes (must be > `start_ledger`).
+    /// * `cliff_ledger` - Optional cliff ledger (must be `start_ledger <= cliff
+    ///   <= end_ledger`).
+    /// * `end_ledger` - The ledger sequence where vesting completes (must be >
+    ///   `start_ledger`).
     ///
     /// # Errors
     ///
-    /// * [`VestingScheduleError::AlreadyInitialized`] - If the contract was already initialized.
+    /// * [`VestingScheduleError::AlreadyInitialized`] - If the contract was
+    ///   already initialized.
     /// * [`VestingScheduleError::InvalidAmount`] - If `total_amount <= 0`.
-    /// * [`VestingScheduleError::InvalidLedgerRange`] - If `start_ledger >= end_ledger`.
-    /// * [`VestingScheduleError::InvalidCliffLedger`] - If `cliff_ledger` is out of bounds.
+    /// * [`VestingScheduleError::InvalidLedgerRange`] - If `start_ledger >=
+    ///   end_ledger`.
+    /// * [`VestingScheduleError::InvalidCliffLedger`] - If `cliff_ledger` is
+    ///   out of bounds.
     ///
     /// # Events
     ///
@@ -206,10 +216,11 @@ impl VestingScheduleContract {
         );
     }
 
-    /// Claims all currently vested and unclaimed tokens, transferring them to `to`.
+    /// Claims all currently vested and unclaimed tokens, transferring them to
+    /// `to`.
     ///
-    /// Requires authorization from `owner`. Returns the amount of tokens transferred (0 if nothing
-    /// is currently claimable).
+    /// Requires authorization from `owner`. Returns the amount of tokens
+    /// transferred (0 if nothing is currently claimable).
     ///
     /// # Arguments
     ///
@@ -218,7 +229,8 @@ impl VestingScheduleContract {
     ///
     /// # Errors
     ///
-    /// * [`VestingScheduleError::NotInitialized`] - If the contract has not been initialized.
+    /// * [`VestingScheduleError::NotInitialized`] - If the contract has not
+    ///   been initialized.
     ///
     /// # Events
     ///
@@ -275,7 +287,8 @@ impl VestingScheduleContract {
         )
     }
 
-    /// Returns the amount currently claimable (`vested_amount - claimed_amount`).
+    /// Returns the amount currently claimable (`vested_amount -
+    /// claimed_amount`).
     pub fn claimable_amount(e: Env) -> i128 {
         extend_instance_ttl(&e);
         let schedule = get_schedule_data(&e);
@@ -326,7 +339,8 @@ fn get_schedule_data(e: &Env) -> ScheduleData {
 /// - Returns `0` before `start_ledger`.
 /// - Returns `0` before `cliff_ledger` (if set).
 /// - Returns `total_amount` at or after `end_ledger`.
-/// - Otherwise returns `(total_amount * (current_ledger - start_ledger)) / (end_ledger - start_ledger)`.
+/// - Otherwise returns `(total_amount * (current_ledger - start_ledger)) /
+///   (end_ledger - start_ledger)`.
 pub fn compute_vested(
     total_amount: i128,
     start_ledger: u32,
@@ -354,8 +368,8 @@ pub fn compute_vested(
 
 /// Exact multiplication and division: `(total * elapsed) / duration`.
 ///
-/// Avoids 128-bit overflow by splitting high and low 64-bit words when `total * elapsed`
-/// would exceed `u128::MAX`.
+/// Avoids 128-bit overflow by splitting high and low 64-bit words when `total *
+/// elapsed` would exceed `u128::MAX`.
 fn mul_div_u128(total: u128, elapsed: u64, duration: u64) -> u128 {
     let elapsed = elapsed as u128;
     let duration = duration as u128;

@@ -6,7 +6,7 @@ use smart_account::{LatchSmartAccount, LatchSmartAccountClient};
 use soroban_sdk::{
     contract, contractimpl,
     testutils::{Address as _, Ledger},
-    vec, Address, Env, Map, Val,
+    vec, Address, Env, IntoVal, Map, Val,
 };
 use stellar_accounts::smart_account::Signer;
 
@@ -361,12 +361,12 @@ fn test_constructor_rejects_cliff_after_end() {
     env.register(VestingScheduleContract, (owner, token, 1000i128, 100u32, Some(210u32), 200u32));
 }
 
-// Note: The AlreadyInitialized (error #1) guard is exercised at the Rust level in
-// `__constructor` directly. In the Soroban test framework, constructors are invoked
-// exactly once during `env.register()` and cannot be re-invoked via the generated
-// client — so there is no test-framework path to exercise this branch at the contract
-// level. The guard exists for forward-compatibility with any future re-initialization
-// vector and is verified by code inspection.
+// Note: The AlreadyInitialized (error #1) guard is exercised at the Rust level
+// in `__constructor` directly. In the Soroban test framework, constructors are
+// invoked exactly once during `env.register()` and cannot be re-invoked via the
+// generated client — so there is no test-framework path to exercise this branch
+// at the contract level. The guard exists for forward-compatibility with any
+// future re-initialization vector and is verified by code inspection.
 
 // ################## QUERY METHODS ##################
 
@@ -391,49 +391,67 @@ fn test_getters_and_queries() {
     );
 }
 
-// ################## END-TO-END INTEGRATION WITH SMART ACCOUNT ##################
+// ################## END-TO-END INTEGRATION WITH SMART ACCOUNT
+// ##################
+
+mod vesting_schedule_wasm {
+    soroban_sdk::contractimport!(file = "testdata/vesting_schedule.wasm");
+}
 
 #[test]
 fn test_end_to_end_deployment_and_claim_via_smart_account() {
     let env = Env::default();
     env.mock_all_auths();
 
-    // 1. Deploy and initialize real LatchSmartAccount
+    // 1. Deploy and initialize a real LatchSmartAccount.
     let signers = vec![&env, Signer::Delegated(Address::generate(&env))];
     let policies: Map<Address, Val> = Map::new(&env);
     let account_id = env.register(LatchSmartAccount, (signers.clone(), policies.clone()));
-    let _account_client = LatchSmartAccountClient::new(&env, &account_id);
+    let smart_account_client = LatchSmartAccountClient::new(&env, &account_id);
 
-    // 2. Deploy MockToken
+    // 2. Deploy MockToken.
     let token_id = env.register(MockTokenContract, ());
     let token_client = MockTokenContractClient::new(&env, &token_id);
 
-    // 3. Deploy VestingSchedule with LatchSmartAccount as the owner
+    // 3. Upload the vesting-schedule WASM and deploy it through the smart
+    // account's own account-authorized deployment entrypoint (#39) — not
+    // `Env::register` directly — so this genuinely exercises the
+    // `CreateContract`-gated deployment path issue #41 requires, not just a
+    // vesting schedule that happens to name the account as owner.
+    let wasm_hash = env.deployer().upload_contract_wasm(vesting_schedule_wasm::WASM);
+    let salt = soroban_sdk::BytesN::from_array(&env, &[1u8; 32]);
+
     let total_amount = 5_000i128;
     let start_ledger = 100u32;
     let end_ledger = 600u32;
-    let vesting_id = env.register(
-        VestingScheduleContract,
-        (account_id.clone(), token_id.clone(), total_amount, start_ledger, None::<u32>, end_ledger),
-    );
+    let init_args: soroban_sdk::Vec<Val> =
+        (&account_id, &token_id, total_amount, start_ledger, None::<u32>, end_ledger)
+            .into_val(&env);
+
+    let vesting_id = smart_account_client.deploy_contract(&wasm_hash, &salt, &init_args);
     let vesting_client = VestingScheduleContractClient::new(&env, &vesting_id);
 
-    // 4. Fund the vesting schedule contract
+    // 4. Verify the vesting schedule is genuinely owned by the smart account.
+    assert_eq!(vesting_client.owner(), account_id);
+    assert_eq!(vesting_client.token(), token_id);
+
+    // 5. Fund the vesting schedule contract.
     token_client.mint(&vesting_id, &total_amount);
     assert_eq!(token_client.balance(&vesting_id), 5_000);
 
-    // 5. Advance ledger to 350 (50% through: (350 - 100) / (600 - 100) = 250 / 500 = 50%)
+    // 6. Advance ledger to 350 (50% through: (350 - 100) / (600 - 100) = 250 / 500
+    //    = 50%)
     env.ledger().set_sequence_number(350);
 
     let beneficiary = Address::generate(&env);
 
-    // 6. Claim vested funds for beneficiary
+    // 7. Claim vested funds for beneficiary.
     let released = vesting_client.claim(&beneficiary);
     assert_eq!(released, 2_500);
     assert_eq!(token_client.balance(&beneficiary), 2_500);
     assert_eq!(token_client.balance(&vesting_id), 2_500);
 
-    // 7. Advance ledger past end to 700 and claim remaining
+    // 8. Advance ledger past end to 700 and claim remaining.
     env.ledger().set_sequence_number(700);
     let released_final = vesting_client.claim(&beneficiary);
     assert_eq!(released_final, 2_500);
