@@ -12,21 +12,41 @@ stale and have been rewritten or moved to "Closed" at the bottom.
 
 **One-line status:** code readiness has moved a lot, gate readiness has not. No contract is
 deployed anywhere with a recorded artifact, the audit has not started and its scope is still
-growing, and one fund-lockout bug (#77) is open in the core account. The critical path, in order:
-fix #77 → freeze the v1 crate set → audit → deploy and record.
+growing, and the signer-removal lockout (#77, verified real) is by recorded decision mitigated
+client-side, not on-chain — and that client-side mitigation does not exist yet. The critical path,
+in order: settle #77 per the #38 decision → freeze the v1 crate set → audit → deploy and record.
 
 ---
 
 ## 1. Security & Audit — the actual blocker
 
-- [ ] **Fix [#77](https://github.com/3K1-Labs/latch-contracts/issues/77) — removing the last
-      signer from a rule can silently lock it forever.** Removing the lone signer from a rule that
-      has only `session-policy` or `spending-limit-policy` attached succeeds (OZ's core check only
-      requires "at least one signer *or* one policy"), then every future call against that rule
-      fails the policy's own zero-signer guard. If it was the account's only signer, the account is
-      bricked with no bootstrap path back in. A contributor volunteered 2026-09-01; no PR yet as of
-      this revision. This is a core-account fund-lockout bug and must land before the audit
-      snapshot, not after.
+- [ ] **Settle [#77](https://github.com/3K1-Labs/latch-contracts/issues/77) in line with the
+      recorded #38 decision.** The lockout is real — verified 2026-09-02 against both OZ 0.7.2 and
+      `LatchSmartAccount` on `main`: OZ's `validate_signers_and_policies` only requires "at least
+      one signer *or* one policy", OZ's own test `remove_signer_with_policy_present_success`
+      asserts a rule may end up with zero signers, and on Latch's account removing the sole signer
+      from a rule carrying `spending-limit-policy` succeeds, after which every authorization
+      against that rule fails (`UnauthorizedSigner` for the old key, `NotAllowed` with no key).
+      But the **decision already on record** (issue #38 / PR #53, 2026-08-27) is that on-chain
+      enforcement of signer-change safety is *shelved*: overriding `SmartAccount`'s core trait
+      methods is the most sensitive change in the system and repeatedly surfaced adjacent
+      bypasses during review, so it stays parked on `experimental` until an external audit, and
+      the near-term mitigation is a **client-side confirmation warning**, with the "only protects
+      callers using Latch's own UI" limitation explicitly accepted. #77 (filed 2026-08-31, after
+      that decision) asks for a new on-chain check in a `remove_signer_checked` that doesn't exist
+      on `main`, and a contributor volunteered on 2026-09-01. To close this item:
+      - Rescope #77 to match the decision before the contributor builds something that gets
+        shelved — either retitle it as the client-side warning's contract-side specification, or
+        close it as a duplicate of #38's accepted risk with a pointer to this entry.
+      - **File the UI warning itself — it is tracked nowhere.** Neither client repo has an issue
+        for it, `latch-web-extension` has no signer-removal flow at all, and `latch-mobile`'s
+        removal is a local-state mock ([latch-mobile#68](https://github.com/3K1-Labs/latch-mobile/issues/68)
+        is the natural home: its scope already includes blocking sole-signer self-removal).
+        Net today: Latch's own clients can't remove signers on-chain, so the exposure is limited
+        to direct contract callers — but the accepted mitigation must exist before mainnet.
+      - Decide whether the audit scope includes PR #53's approach, so on-chain enforcement can be
+        reconsidered post-audit instead of re-litigated. Note `experimental` is 13 commits behind
+        `main`; #53 would need a rebase before it's a usable reference again.
 - [ ] **Freeze the audit / v1 deploy scope.** The lineup the original checklist described no
       longer exists. Since `451ffcf` the workspace gained `p256-verifier`, `secp256k1-verifier`,
       `parameter-scoped-policy`, `recipient-allowlist-policy`,
