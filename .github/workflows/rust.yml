@@ -126,3 +126,42 @@ jobs:
         if: needs.changes.outputs.code == 'true'
         run: cargo test --verbose
         working-directory: ${{ matrix.workspace }}
+
+  # `build-and-test` compiles for the native target only, which is all
+  # `cargo test` needs (soroban-sdk simulates the host in-process). It never
+  # proves the *deployable* artifact builds: a plain
+  # `cargo build --target wasm32v1-none` fails outright on soroban-sdk's
+  # `experimental_spec_shaking_v2` feature, which only `stellar contract build`
+  # (stellar-cli v25.2.0+) knows how to satisfy. So a PR could pass every job
+  # above while the real WASM build was broken — we hit exactly that once
+  # (see docs/TODO.md history). This job runs the same command CONTRIBUTING.md
+  # asks contributors to run by hand, over the whole workspace in one go.
+  #
+  # OpenZeppelin's own CI keeps this step disabled over "same name functions
+  # across multiple contracts". That doesn't apply here: stellar-cli builds
+  # each workspace member as its own `cargo rustc --manifest-path` invocation,
+  # so nothing is linked together. Verified across all 19 crates locally
+  # before this job was added.
+  wasm-build:
+    needs: changes
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        if: needs.changes.outputs.code == 'true'
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          toolchain: stable
+          target: wasm32v1-none
+
+      # Prebuilt binary from the stellar-cli release, not `cargo install`
+      # (which takes 10+ minutes). The action ref *is* the version installed;
+      # bump it deliberately, and keep it >= v25.2.0 for spec-shaking-v2.
+      - name: Install stellar-cli
+        if: needs.changes.outputs.code == 'true'
+        uses: stellar/stellar-cli@v27.1.0
+
+      - name: Build every contract to WASM (whole workspace)
+        if: needs.changes.outputs.code == 'true'
+        run: stellar contract build
