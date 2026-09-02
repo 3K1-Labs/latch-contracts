@@ -45,6 +45,7 @@ account-factory/contracts/
 latch-verifiers/
   ed25519-verifier/                            Ed25519, raw hash
   p256-verifier/                               P-256, raw hash
+  secp256k1-verifier/                          secp256k1, raw hash, recover and compare
   webauthn-verifier/                           P-256 with a WebAuthn ceremony
 policies/
   threshold-policy/                            wraps OZ's simple_threshold policy
