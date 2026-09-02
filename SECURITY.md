@@ -16,10 +16,29 @@ address the report before any public disclosure.
 
 ## Scope
 
-This policy covers the smart contracts in this repository:
-`latch-smart-account`, `account-factory`, `latch-verifiers/*`, and the
-`policies/*` crates (`threshold-policy`, `weighted-threshold-policy`,
-`session-policy`, `spending-limit-policy`).
+This policy covers every deployable contract crate in this repository's Cargo
+workspace:
+
+- `latch-smart-account` — the account contract itself, including its
+  self-authorized `upgrade()` and `deploy_contract` entrypoints.
+- `account-factory/contracts/factory-contract` — the `dummy-*` crates beside
+  it are test fixtures only.
+- `latch-verifiers/*` — `ed25519-verifier`, `p256-verifier`,
+  `secp256k1-verifier`, `webauthn-verifier`.
+- `policies/*` — `threshold-policy`, `weighted-threshold-policy`,
+  `session-policy`, `spending-limit-policy`,
+  `multi-token-spending-limit-policy`, `parameter-scoped-policy`,
+  `recipient-allowlist-policy`.
+- `fee-forwarder` — the permissioned relayer-sponsorship contract, including
+  its admin / manager / executor role handling.
+- `templates/*` — `timelock-vault`, `vesting-schedule`. These are reference
+  contracts that users deploy for themselves rather than Latch-operated
+  singletons, but a bug in one still puts funds at risk, so please report it
+  here too.
+
+`demo/modified-ed25519-verifier` is a worked reference that is explicitly not
+meant to be deployed. Reports against it are still welcome, but it is not a
+production surface.
 
 Vulnerabilities in upstream dependencies (e.g. OpenZeppelin's
 [stellar-contracts](https://github.com/OpenZeppelin/stellar-contracts), or the
