@@ -34,19 +34,20 @@ in order: settle #77 per the #38 decision → freeze the v1 crate set → audit 
       the near-term mitigation is a **client-side confirmation warning**, with the "only protects
       callers using Latch's own UI" limitation explicitly accepted. #77 (filed 2026-08-31, after
       that decision) asks for a new on-chain check in a `remove_signer_checked` that doesn't exist
-      on `main`, and a contributor volunteered on 2026-09-01. To close this item:
-      - Rescope #77 to match the decision before the contributor builds something that gets
-        shelved — either retitle it as the client-side warning's contract-side specification, or
-        close it as a duplicate of #38's accepted risk with a pointer to this entry.
-      - **File the UI warning itself — it is tracked nowhere.** Neither client repo has an issue
-        for it, `latch-web-extension` has no signer-removal flow at all, and `latch-mobile`'s
-        removal is a local-state mock ([latch-mobile#68](https://github.com/3K1-Labs/latch-mobile/issues/68)
-        is the natural home: its scope already includes blocking sole-signer self-removal).
-        Net today: Latch's own clients can't remove signers on-chain, so the exposure is limited
-        to direct contract callers — but the accepted mitigation must exist before mainnet.
-      - Decide whether the audit scope includes PR #53's approach, so on-chain enforcement can be
-        reconsidered post-audit instead of re-litigated. Note `experimental` is 13 commits behind
-        `main`; #53 would need a rebase before it's a usable reference again.
+      on `main`, and a contributor volunteered on 2026-09-01. Actions:
+      - [x] Rescope #77 to match the decision — done 2026-09-02: status comment, retitled,
+        relabelled `blocked`/`documentation`, `help wanted` removed, volunteer redirected.
+      - [x] File the UI warning itself — done 2026-09-02 as
+        [latch-mobile#69](https://github.com/3K1-Labs/latch-mobile/issues/69), cross-linked from
+        [latch-mobile#68](https://github.com/3K1-Labs/latch-mobile/issues/68) (real on-chain
+        removal, currently a local-state mock). `latch-web-extension` has no removal flow at all,
+        so nothing to file there yet; its self-management UI issue (#42) inherits this when it
+        starts. Net today: Latch's own clients can't remove signers on-chain, so exposure is
+        limited to direct contract callers — but **latch-mobile#69 must ship before mainnet**;
+        it is the accepted mitigation.
+      - [ ] Decide whether the audit scope includes PR #53's approach, so on-chain enforcement can
+        be reconsidered post-audit instead of re-litigated. Note `experimental` is 13 commits
+        behind `main`; #53 would need a rebase before it's a usable reference again.
 - [ ] **Freeze the audit / v1 deploy scope.** The lineup the original checklist described no
       longer exists. Since `451ffcf` the workspace gained `p256-verifier`, `secp256k1-verifier`,
       `parameter-scoped-policy`, `recipient-allowlist-policy`,
