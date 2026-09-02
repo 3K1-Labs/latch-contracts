@@ -9,7 +9,7 @@
 use soroban_sdk::{
     auth::{Context, ContractContext},
     contract, contracterror, contractevent, contractimpl, contracttype, panic_with_error, Address,
-    Env, Symbol, TryIntoVal, Vec,
+    Env, Symbol, TryFromVal, Vec,
 };
 use stellar_accounts::{
     policies::Policy,
@@ -196,12 +196,12 @@ impl Policy for RecipientAllowlistPolicy {
 
                 // A standard SEP-41 `transfer` is `transfer(from, to, amount)`.
                 // The recipient is the second argument (index 1).
-                let recipient_val = args
+                let to_val = args
                     .get(1)
                     .unwrap_or_else(|| panic_with_error!(e, RecipientError::InvalidTransferArgs));
-                let recipient: Address = recipient_val
-                    .try_into_val(e)
-                    .unwrap_or_else(|_| panic_with_error!(e, RecipientError::InvalidTransferArgs));
+                let Ok(recipient) = Address::try_from_val(e, &to_val) else {
+                    panic_with_error!(e, RecipientError::InvalidTransferArgs)
+                };
 
                 if !allowed_recipients.contains(recipient.clone()) {
                     panic_with_error!(e, RecipientError::RecipientNotAllowed)
