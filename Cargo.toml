@@ -21,6 +21,7 @@ members = [
   "fee-forwarder",
   "templates/timelock-vault",
   "templates/vesting-schedule",
+  "templates/recurring-escrow",
 ]
 
 [workspace.dependencies]
