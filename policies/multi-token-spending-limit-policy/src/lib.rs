@@ -8,6 +8,24 @@
 //! cap is meaningful even when the account spends from several different
 //! tokens.
 //!
+//! # Units and decimal normalization
+//!
+//! `spending_limit_usd` and the tracked totals in [`PolicyData`] are in
+//! **whole US dollars** (integer; sub-dollar transfers truncate toward zero).
+//! A raw `transfer` amount arrives in the token's own smallest unit, so the
+//! USD value of a transfer is
+//!
+//! ```text
+//! amount_usd = amount * price / 10^oracle_decimals / 10^token_decimals
+//! ```
+//!
+//! Both `10^oracle_decimals` (from the oracle's `decimals()`) and each token's
+//! `10^token_decimals` (from the token's own `decimals()`) are queried once at
+//! install time and cached. Without the per-token divisor a 7-decimal token
+//! would be mispriced by 10^7 against the cap; every allowed token is
+//! normalized to a whole-token count before pricing, so tokens with different
+//! decimals share one cap correctly.
+//!
 //! # Oracle interface
 //!
 //! The configured oracle must implement the SEP-40 "Price Oracle Consumer"
@@ -17,9 +35,10 @@
 //! - `lastprice(asset: Asset) -> Option<PriceData>`, called with
 //!   `Asset::Stellar(<token address>)` for each allowed token.
 //! - `decimals() -> u32`, queried once at install time and cached, since a
-//!   given oracle deployment's precision doesn't change afterwards. USD amounts
-//!   (`spending_limit_usd`, the values in [`PolicyData`]) are in that oracle's
-//!   own fixed-point convention, not a convention this policy picks.
+//!   given oracle deployment's precision doesn't change afterwards.
+//!
+//! Each allowed token contract must expose the SEP-41 `decimals() -> u32`
+//! entrypoint, queried once per token at install time.
 //!
 //! # Oracle trust model
 //!
@@ -47,7 +66,7 @@ use stellar_accounts::{
 };
 
 mod oracle;
-use oracle::{fetch_price, fetch_usd_divisor};
+use oracle::{fetch_price, fetch_token_divisor, fetch_usd_divisor};
 
 /// Error codes for the multi-token spending limit policy.
 ///
@@ -84,6 +103,14 @@ pub enum Error {
     /// a non-positive price, a price timestamped in the future, or a
     /// `decimals()` value that can't be used to build a base-10 divisor.
     InvalidOracleResponse = 10,
+    /// An allowed token's `decimals()` call reverted, the address is not a
+    /// SEP-41 token, or it reported a `decimals` value too large to build a
+    /// base-10 divisor from.
+    InvalidTokenResponse = 11,
+    /// Converting a raw transfer amount to USD overflowed `i128`
+    /// (`amount * price` before scaling down). Fails closed rather than
+    /// wrapping or saturating to a value that could misstate the spend.
+    AmountConversionOverflow = 12,
 }
 
 /// Installation parameters for the multi-token spending limit policy.
@@ -91,10 +118,8 @@ pub enum Error {
 #[derive(Clone, Debug, PartialEq)]
 pub struct MultiTokenSpendingLimitAccountParams {
     /// The maximum amount that can be spent across `allowed_tokens` within
-    /// `period_ledgers`, denominated in the configured oracle's own
-    /// fixed-point USD convention (i.e. at `oracle.decimals()` precision,
-    /// queried and cached at install time — not a fixed convention this
-    /// policy assumes).
+    /// `period_ledgers`, in **whole US dollars** (integer). Transfers worth
+    /// less than $1 truncate toward zero for accounting purposes.
     pub spending_limit_usd: i128,
     /// The rolling window size, in ledgers, over which the limit applies.
     pub period_ledgers: u32,
@@ -118,6 +143,7 @@ pub struct SpendingEntry {
 #[contracttype]
 #[derive(Clone, Debug, PartialEq)]
 pub struct PolicyData {
+    /// The rolling-window cap, in whole US dollars.
     pub spending_limit_usd: i128,
     pub period_ledgers: u32,
     pub oracle_address: Address,
@@ -126,6 +152,11 @@ pub struct PolicyData {
     /// convert a price into this policy's USD accounting.
     pub usd_divisor: i128,
     pub allowed_tokens: Vec<Address>,
+    /// `10.pow(token.decimals())` for each entry in `allowed_tokens`, same
+    /// order and length. Queried once per token at install time and used in
+    /// `enforce` to normalize a raw transfer amount to a whole-token count
+    /// before pricing.
+    pub token_divisors: Vec<i128>,
     pub spending_history: Vec<SpendingEntry>,
     pub cached_total_spent_usd: i128,
 }
@@ -214,9 +245,9 @@ impl Policy for MultiTokenSpendingLimitPolicy {
     /// Installs the policy on a smart account. Only `CallContract` context
     /// rules are allowed. Requires authorization from the smart account.
     ///
-    /// Queries the oracle's `decimals()` once, so a misconfigured oracle
-    /// address (one that doesn't implement the SEP-40 interface, or that
-    /// reverts) is caught at install time rather than at the first
+    /// Queries the oracle's `decimals()` and every allowed token's
+    /// `decimals()` once, so a misconfigured oracle or a non-token address in
+    /// `allowed_tokens` is caught at install time rather than at the first
     /// `enforce`.
     ///
     /// # Errors
@@ -229,6 +260,8 @@ impl Policy for MultiTokenSpendingLimitPolicy {
     ///   for this smart account and context rule.
     /// * [`Error::InvalidOracleResponse`] - When the oracle's `decimals()`
     ///   can't be used to build a base-10 divisor.
+    /// * [`Error::InvalidTokenResponse`] - When an allowed token's `decimals()`
+    ///   reverts or can't be used to build a base-10 divisor.
     fn install(
         e: &Env,
         install_params: Self::AccountParams,
@@ -256,12 +289,18 @@ impl Policy for MultiTokenSpendingLimitPolicy {
 
         let usd_divisor = fetch_usd_divisor(e, &install_params.oracle_address);
 
+        let mut token_divisors = Vec::new(e);
+        for token in install_params.allowed_tokens.iter() {
+            token_divisors.push_back(fetch_token_divisor(e, &token));
+        }
+
         let data = PolicyData {
             spending_limit_usd: install_params.spending_limit_usd,
             period_ledgers: install_params.period_ledgers,
             oracle_address: install_params.oracle_address,
             usd_divisor,
             allowed_tokens: install_params.allowed_tokens,
+            token_divisors,
             spending_history: Vec::new(e),
             cached_total_spent_usd: 0,
         };
@@ -302,6 +341,8 @@ impl Policy for MultiTokenSpendingLimitPolicy {
     ///   the target token.
     /// * [`Error::StaleOraclePrice`] - When the oracle's price is older than
     ///   `MAX_STALENESS_LEDGERS`.
+    /// * [`Error::AmountConversionOverflow`] - When `amount * price` overflows
+    ///   `i128` during USD conversion.
     /// * [`Error::SpendingLimitExceeded`] - When adding this transfer would
     ///   exceed the rolling spending limit.
     /// * [`Error::HistoryCapacityExceeded`] - When the spending history has
@@ -337,9 +378,16 @@ impl Policy for MultiTokenSpendingLimitPolicy {
 
         let mut data = get_policy_data(e, context_rule.id, &smart_account);
 
-        if !data.allowed_tokens.contains(&target) {
-            panic_with_error!(e, Error::TokenNotAllowed)
-        }
+        // Position of `target` in `allowed_tokens` also indexes its cached
+        // `10^decimals` divisor; a target that isn't allowed has neither.
+        let token_idx = data
+            .allowed_tokens
+            .first_index_of(&target)
+            .unwrap_or_else(|| panic_with_error!(e, Error::TokenNotAllowed));
+        let token_divisor = data
+            .token_divisors
+            .get(token_idx)
+            .unwrap_or_else(|| panic_with_error!(e, Error::TokenNotAllowed));
 
         // Fails closed: `fetch_price` panics if the oracle call reverts,
         // and turns a `None` response (no price for this asset) into
@@ -355,7 +403,16 @@ impl Policy for MultiTokenSpendingLimitPolicy {
             panic_with_error!(e, Error::StaleOraclePrice)
         }
 
-        let amount_usd = amount.saturating_mul(price_data.price).saturating_div(data.usd_divisor);
+        // `amount` is in the token's smallest unit. Normalize to a whole-token
+        // count (`/ token_divisor`) and drop the oracle's price precision
+        // (`/ usd_divisor`) to land in whole USD. `checked_*` so a huge
+        // `amount * price` fails closed instead of saturating to a valuation
+        // that no longer reflects the transfer.
+        let amount_usd = amount
+            .checked_mul(price_data.price)
+            .and_then(|v| v.checked_div(data.usd_divisor))
+            .and_then(|v| v.checked_div(token_divisor))
+            .unwrap_or_else(|| panic_with_error!(e, Error::AmountConversionOverflow));
 
         // Clean up old entries outside the rolling window before checking
         // the limit, so the cached total matches the live window.

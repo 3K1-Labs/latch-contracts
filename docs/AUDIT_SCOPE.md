@@ -7,11 +7,21 @@ report except fixes for audit findings.
 
 **Update 2026-09-04:** the audit team requires an Almanax AI pre-scan with every finding
 triaged before the engagement starts. That scan (12 findings) was worked through in
-[`almanax-triage.md`](almanax-triage.md): 3 dismissed as false positives, 2 dismissed as
+[`almanax-triage.md`](almanax-triage.md): 2 dismissed as false positives, 2 dismissed as
 informational, 1 dismissed as a pre-existing accepted risk (§Known and accepted risks #1
-below), and **2 real fixes + 4 CI hardening changes applied** to `main`. The `audit-v1`
-tag was re-pointed to the post-triage commit; that commit is the new baseline and the
-"nothing else lands" rule above continues from there.
+below), and **2 real fixes + 4 CI hardening changes applied** to `main`.
+
+**Baseline update 2026-09-08/-09:** the `audit-v1` tag was force-repointed from `ace9dbd`
+(local + `origin`) to track the audit baseline, which is now PR #88 (Almanax triage) plus
+PR #90 (threat-model `Tamper.2` fix in `multi-token-spending-limit-policy`: raw transfer
+amounts are normalized by each token's own `decimals()` before USD pricing, and the
+conversion is `checked_*` rather than saturating). The "nothing else lands" rule runs from
+that commit. The build is byte-reproducible and matches the recorded 2026-09-03 testnet
+artifacts for 12 of 16 crates; the 4 that differ (`timelock-vault` and
+`multi-token-spending-limit-policy` from the fixes, `latch-smart-account` and
+`factory-contract` from non-behavioural doc-comment/spec changes) need a fresh testnet
+deploy before submission — tracked in [`BUILD.md`](BUILD.md). Threat model in
+[THREAT_MODEL.md](THREAT_MODEL.md); executed test evidence in [TEST_EVIDENCE.md](TEST_EVIDENCE.md).
 
 ## In scope
 
@@ -37,11 +47,12 @@ Every deployable crate in the Cargo workspace. Line counts are non-blank, non-co
 | `templates/timelock-vault` | User-deployed personal contract | 80 | 14 |
 | `templates/vesting-schedule` | User-deployed personal contract | 242 | 18 |
 
-Counts are as of 2026-09-02. The 2026-09-04 Almanax triage changed two in-scope crates:
-`templates/timelock-vault` gained a permissionless `bump_ttl()` keep-alive (now 17 tests)
-and `policies/multi-token-spending-limit-policy` gained oracle price/timestamp validation
-in `fetch_price` (now 26 tests). See [`almanax-triage.md`](almanax-triage.md) findings #3
-and #7/#8.
+Counts are as of 2026-09-02. Since then, two in-scope crates changed executable logic:
+`templates/timelock-vault` gained a permissionless `bump_ttl()` keep-alive (Almanax #3; now
+17 tests), and `policies/multi-token-spending-limit-policy` gained oracle price/timestamp
+validation in `fetch_price` (Almanax #7/#8) plus per-token `decimals()` normalization and
+checked USD conversion (threat-model `Tamper.2`, PR #90; now 33 tests). See
+[`almanax-triage.md`](almanax-triage.md) and [`THREAT_MODEL.md`](THREAT_MODEL.md).
 
 **Where to spend the time.** The Latch-original logic is concentrated in `factory-contract`,
 `session-policy`, `parameter-scoped-policy`, `multi-token-spending-limit-policy`,
@@ -88,7 +99,7 @@ dependencies. `Cargo.lock` is committed.
 - **`fee-forwarder`** is the one contract with live roles: `admin`, `manager`, and the
   `executor` set (the relayer's operating addresses). Role grant/revoke is available
   post-deploy. Key custody for `admin`/`manager` is an operational decision tracked in
-  `MAINNET_READINESS_CHECKLIST.md`, not a code question.
+  [issue #84](https://github.com/3K1-Labs/latch-contracts/issues/84), not a code question.
 - **Templates** are deployed by end users for themselves; Latch holds no role in them.
 
 ## Known and accepted risks (please confirm, don't rediscover)
@@ -117,5 +128,8 @@ dependencies. `Cargo.lock` is committed.
 
 `stellar contract build` (stellar-cli ≥ 25.2.0; CI uses 27.1.0) at the workspace root builds all
 crates. A plain `cargo build --target wasm32v1-none` fails by design (soroban-sdk
-`experimental_spec_shaking_v2`). WASM hashes for the audited commit will be recorded in
-`BUILD.md` with archived artifacts under `deployments/artifacts/` at deployment time.
+`experimental_spec_shaking_v2`). The build is deterministic: a rebuild at `ace9dbd`
+reproduces all 16 recorded 2026-09-03 testnet hashes byte-for-byte, and a rebuild at the
+`audit-v1` commit `6b34ccc` reproduces 12 of them (see [`BUILD.md`](BUILD.md) for the
+per-crate reconciliation and the current `6b34ccc` hashes). Archived artifacts for the
+submitted commit go under `deployments/artifacts/` at deployment time.

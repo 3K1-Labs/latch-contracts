@@ -20,3 +20,7 @@ latch-contracts.code-workspace
 ECOSYSTEM_LANDSCAPE.md
 scf award.md
 REFERENCE_FINDINGS.md
+Threat Modeling Readiness.md
+docs/AUDIT_READINESS_CHECKLIST.md
+docs/MAINNET_READINESS_CHECKLIST.md
+docs/audit-evidence/

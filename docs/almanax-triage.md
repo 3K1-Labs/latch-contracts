@@ -1,8 +1,15 @@
 # Almanax Pre-Audit Scan — Triage
 
+**Reconciliation 2026-09-08:** the two code fixes (#3, #7/#8) and the four CI changes are
+merged at `6b34ccc`. A fresh `cargo test --workspace`, `stellar contract build` and
+`cargo clippy --workspace` all pass at that commit — see [TEST_EVIDENCE.md](TEST_EVIDENCE.md).
+The `audit-v1` tag has been force-repointed to `6b34ccc` on the local repo and `origin`, as
+the "on completion" step below intended. Still to attach to the audit submission itself: the
+original Almanax scan export, and a post-fix rescan with its date, tool version and source SHA.
+
 - **Scan:** `3K1-Labs/latch-contracts @ f2ee2db` (was `main` HEAD when the scan ran)
 - **Resolution:** PR [#88](https://github.com/3K1-Labs/latch-contracts/pull/88); the
-  `audit-v1` tag is force-repointed to that PR's merge commit on completion
+  `audit-v1` tag was force-repointed to that PR's merge commit `6b34ccc` on 2026-09-08
 - **Run:** 2026-09-04, Almanax project `7191295a-…`, scan `b472be66-…`
 - **Result:** 12 findings — 1 CRITICAL, 2 HIGH, 5 MEDIUM, 4 LOW
 - **Purpose:** intake gate for the external audit. Every finding is dispositioned below:

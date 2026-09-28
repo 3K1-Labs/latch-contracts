@@ -9,6 +9,12 @@ use soroban_sdk::{contracttype, panic_with_error, symbol_short, Address, Env, In
 
 use crate::Error;
 
+/// A generous upper bound on a plausible token `decimals()` value. Guards
+/// `10i128.checked_pow` against overflow if a misconfigured or malicious
+/// token address returns something absurd. Real SEP-41 tokens are 7 on
+/// Stellar; nothing legitimate approaches this.
+const MAX_TOKEN_DECIMALS: u32 = 20;
+
 /// SEP-40 asset descriptor, as understood by a Reflector-compatible oracle.
 /// Reflector prices either a Stellar contract address directly, or an
 /// external ticker (e.g. `"BTC"`, `"USD"`) on feeds that track off-chain
@@ -53,6 +59,25 @@ pub fn fetch_usd_divisor(e: &Env, oracle_address: &Address) -> i128 {
     10i128
         .checked_pow(decimals)
         .unwrap_or_else(|| panic_with_error!(e, Error::InvalidOracleResponse))
+}
+
+/// Queries a token contract's `decimals()` and converts it into the base-10
+/// divisor `10.pow(decimals)` used to turn a raw `transfer` amount (in the
+/// token's own smallest unit) into a whole-token count during USD accounting.
+///
+/// Called once per allowed token at `install` time — a token's decimals do
+/// not change — and the result is cached in `PolicyData::token_divisors`,
+/// parallel to `allowed_tokens`. Fails closed ([`Error::InvalidTokenResponse`])
+/// if the call reverts, the address is not a SEP-41 token, or it reports a
+/// `decimals` value too large to build a divisor from.
+pub fn fetch_token_divisor(e: &Env, token: &Address) -> i128 {
+    let decimals: u32 = e.invoke_contract(token, &DECIMALS_FN, soroban_sdk::vec![e]);
+    if decimals > MAX_TOKEN_DECIMALS {
+        panic_with_error!(e, Error::InvalidTokenResponse)
+    }
+    10i128
+        .checked_pow(decimals)
+        .unwrap_or_else(|| panic_with_error!(e, Error::InvalidTokenResponse))
 }
 
 /// Queries the oracle's `lastprice` for `token`, failing closed if the

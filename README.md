@@ -145,9 +145,11 @@ stellar contract build                                       # WASM build
 
 Planning, spec, and process docs live in [`docs/`](docs/):
 
+- [`docs/AUDIT_SCOPE.md`](docs/AUDIT_SCOPE.md) — What the external audit covers, the `audit-v1` baseline, and known accepted risks
+- [`docs/THREAT_MODEL.md`](docs/THREAT_MODEL.md) — Latch STRIDE assessment, dataflow diagrams and residual risks
+- [`docs/TEST_EVIDENCE.md`](docs/TEST_EVIDENCE.md) — Executed test / build / lint results and integration coverage limits
 - [`docs/factory-spec.md`](docs/factory-spec.md) — Detailed behavioral specification for the factory contract (validation rules, address derivation formula, canonicalization, worked examples)
 - [`docs/UPGRADE_PATH.md`](docs/UPGRADE_PATH.md) — How the factory and smart account handle upgrades and versioning
-- [`docs/MAINNET_READINESS_CHECKLIST.md`](docs/MAINNET_READINESS_CHECKLIST.md) — What's still open before real funds sit behind these contracts
 - [`docs/OSS_READINESS_CHECKLIST.md`](docs/OSS_READINESS_CHECKLIST.md) — Repo-agnostic checklist for getting any Latch repo ready for outside contributors
 - [`docs/ISSUE_TRIAGE_GUIDE.md`](docs/ISSUE_TRIAGE_GUIDE.md) — How we got every open issue here ready for outside contributors; apply the same process in the other Latch repos
 - [`docs/BUILD.md`](docs/BUILD.md) — Deployment records for contracts currently live on a network

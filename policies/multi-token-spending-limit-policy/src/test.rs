@@ -47,6 +47,33 @@ impl MockOracle {
     }
 }
 
+// ################## MOCK TOKEN ##################
+
+/// A minimal stand-in for a SEP-41 token. The policy only ever calls
+/// `decimals()` on an allowed token (at install time), so that is all this
+/// needs to answer; `transfer` itself is modelled through `transfer_context`,
+/// not a real cross-contract call.
+#[contract]
+struct MockToken;
+
+#[contractimpl]
+impl MockToken {
+    pub fn __constructor(e: Env, decimals: u32) {
+        e.storage().instance().set(&symbol_short!("decimals"), &decimals);
+    }
+
+    pub fn decimals(e: Env) -> u32 {
+        e.storage().instance().get(&symbol_short!("decimals")).unwrap()
+    }
+}
+
+/// Registers a `MockToken` reporting `decimals`. Most tests use `0` so a raw
+/// `transfer` amount already is a whole-token count and the USD math reduces
+/// to the pre-normalization form the assertions were written against.
+fn setup_token(e: &Env, decimals: u32) -> Address {
+    e.register(MockToken, (decimals,))
+}
+
 // ################## HELPERS ##################
 
 fn create_context_rule(e: &Env, call_target: Address) -> ContextRule {
@@ -136,7 +163,7 @@ fn install_policy(
 fn test_install_and_get_policy_data() {
     let (e, smart_account, client) = setup_env();
     let oracle = setup_oracle(&e, ONE_USD);
-    let token = Address::generate(&e);
+    let token = setup_token(&e, 0);
     let tokens = vec![&e, token];
 
     let rule = install_policy(&e, &client, &smart_account, &oracle, tokens.clone(), 1_000, 100);
@@ -149,13 +176,15 @@ fn test_install_and_get_policy_data() {
     assert_eq!(data.cached_total_spent_usd, 0);
     // Cached from the oracle's `decimals() == 8` at install time.
     assert_eq!(data.usd_divisor, ONE_USD);
+    // One divisor per allowed token; this mock token reports `decimals() == 0`.
+    assert_eq!(data.token_divisors, vec![&e, 1i128]);
 }
 
 #[test]
 fn test_install_caches_non_standard_oracle_decimals() {
     let (e, smart_account, client) = setup_env();
     let oracle = setup_oracle_with_decimals(&e, 1_000_000, 6);
-    let token = Address::generate(&e);
+    let token = setup_token(&e, 0);
 
     let rule = install_policy(&e, &client, &smart_account, &oracle, vec![&e, token], 1_000, 100);
 
@@ -168,7 +197,7 @@ fn test_install_caches_non_standard_oracle_decimals() {
 fn test_install_rejects_non_call_contract() {
     let (e, smart_account, client) = setup_env();
     let oracle = setup_oracle(&e, ONE_USD);
-    let token = Address::generate(&e);
+    let token = setup_token(&e, 0);
 
     let mut rule = create_context_rule(&e, token.clone());
     rule.context_type = ContextRuleType::Default;
@@ -190,7 +219,7 @@ fn test_install_rejects_non_call_contract() {
 fn test_install_rejects_non_positive_limit() {
     let (e, smart_account, client) = setup_env();
     let oracle = setup_oracle(&e, ONE_USD);
-    let token = Address::generate(&e);
+    let token = setup_token(&e, 0);
 
     install_policy(&e, &client, &smart_account, &oracle, vec![&e, token], 0, 100);
 }
@@ -200,7 +229,7 @@ fn test_install_rejects_non_positive_limit() {
 fn test_install_rejects_zero_period() {
     let (e, smart_account, client) = setup_env();
     let oracle = setup_oracle(&e, ONE_USD);
-    let token = Address::generate(&e);
+    let token = setup_token(&e, 0);
 
     install_policy(&e, &client, &smart_account, &oracle, vec![&e, token], 1_000, 0);
 }
@@ -229,7 +258,7 @@ fn test_install_rejects_empty_allowed_tokens() {
 fn test_install_rejects_double_install() {
     let (e, smart_account, client) = setup_env();
     let oracle = setup_oracle(&e, ONE_USD);
-    let token = Address::generate(&e);
+    let token = setup_token(&e, 0);
     let tokens = vec![&e, token];
 
     let rule = install_policy(&e, &client, &smart_account, &oracle, tokens.clone(), 1_000, 100);
@@ -252,7 +281,7 @@ fn test_install_rejects_oracle_decimals_too_large() {
     // 31 decimals overflows the `10i128.checked_pow` bound this policy
     // enforces (`MAX_ORACLE_DECIMALS == 30`).
     let oracle = setup_oracle_with_decimals(&e, ONE_USD, 31);
-    let token = Address::generate(&e);
+    let token = setup_token(&e, 0);
 
     install_policy(&e, &client, &smart_account, &oracle, vec![&e, token], 1_000, 100);
 }
@@ -263,7 +292,7 @@ fn test_install_rejects_oracle_decimals_too_large() {
 fn test_uninstall_clears_state() {
     let (e, smart_account, client) = setup_env();
     let oracle = setup_oracle(&e, ONE_USD);
-    let token = Address::generate(&e);
+    let token = setup_token(&e, 0);
 
     let rule = install_policy(&e, &client, &smart_account, &oracle, vec![&e, token], 1_000, 100);
     client.uninstall(&rule, &smart_account);
@@ -287,7 +316,7 @@ fn test_uninstall_rejects_not_installed() {
 fn test_enforce_accepts_within_limit() {
     let (e, smart_account, client) = setup_env();
     let oracle = setup_oracle(&e, ONE_USD);
-    let token = Address::generate(&e);
+    let token = setup_token(&e, 0);
 
     let rule =
         install_policy(&e, &client, &smart_account, &oracle, vec![&e, token.clone()], 1_000, 100);
@@ -306,7 +335,7 @@ fn test_enforce_converts_using_non_standard_oracle_decimals() {
     // A 6-decimal oracle pricing the token at $1.00: 1_000_000 == $1 at
     // 6 decimals, same real-world price as `ONE_USD` at 8 decimals.
     let oracle = setup_oracle_with_decimals(&e, 1_000_000, 6);
-    let token = Address::generate(&e);
+    let token = setup_token(&e, 0);
 
     let rule =
         install_policy(&e, &client, &smart_account, &oracle, vec![&e, token.clone()], 1_000, 100);
@@ -325,7 +354,7 @@ fn test_enforce_converts_using_non_standard_oracle_decimals() {
 fn test_enforce_rejects_token_not_allowed() {
     let (e, smart_account, client) = setup_env();
     let oracle = setup_oracle(&e, ONE_USD);
-    let allowed_token = Address::generate(&e);
+    let allowed_token = setup_token(&e, 0);
     let other_token = Address::generate(&e);
 
     let rule =
@@ -340,7 +369,7 @@ fn test_enforce_rejects_token_not_allowed() {
 fn test_enforce_rejects_non_transfer_call() {
     let (e, smart_account, client) = setup_env();
     let oracle = setup_oracle(&e, ONE_USD);
-    let token = Address::generate(&e);
+    let token = setup_token(&e, 0);
 
     let rule =
         install_policy(&e, &client, &smart_account, &oracle, vec![&e, token.clone()], 1_000, 100);
@@ -362,7 +391,7 @@ fn test_enforce_rejects_non_transfer_call() {
 fn test_enforce_rejects_missing_amount_arg() {
     let (e, smart_account, client) = setup_env();
     let oracle = setup_oracle(&e, ONE_USD);
-    let token = Address::generate(&e);
+    let token = setup_token(&e, 0);
 
     let rule =
         install_policy(&e, &client, &smart_account, &oracle, vec![&e, token.clone()], 1_000, 100);
@@ -385,7 +414,7 @@ fn test_enforce_rejects_missing_amount_arg() {
 fn test_enforce_rejects_negative_amount() {
     let (e, smart_account, client) = setup_env();
     let oracle = setup_oracle(&e, ONE_USD);
-    let token = Address::generate(&e);
+    let token = setup_token(&e, 0);
 
     let rule =
         install_policy(&e, &client, &smart_account, &oracle, vec![&e, token.clone()], 1_000, 100);
@@ -399,7 +428,7 @@ fn test_enforce_rejects_negative_amount() {
 fn test_enforce_rejects_when_oracle_has_no_price() {
     let (e, smart_account, client) = setup_env();
     let oracle = setup_oracle(&e, ONE_USD);
-    let token = Address::generate(&e);
+    let token = setup_token(&e, 0);
 
     let rule =
         install_policy(&e, &client, &smart_account, &oracle, vec![&e, token.clone()], 1_000, 100);
@@ -419,7 +448,7 @@ fn test_enforce_rejects_when_oracle_has_no_price() {
 fn test_enforce_rejects_stale_price() {
     let (e, smart_account, client) = setup_env();
     let oracle = setup_oracle(&e, ONE_USD);
-    let token = Address::generate(&e);
+    let token = setup_token(&e, 0);
 
     let rule =
         install_policy(&e, &client, &smart_account, &oracle, vec![&e, token.clone()], 1_000, 100);
@@ -438,7 +467,7 @@ fn test_enforce_rejects_stale_price() {
 fn test_enforce_rejects_negative_oracle_price() {
     let (e, smart_account, client) = setup_env();
     let oracle = setup_oracle(&e, ONE_USD);
-    let token = Address::generate(&e);
+    let token = setup_token(&e, 0);
 
     let rule =
         install_policy(&e, &client, &smart_account, &oracle, vec![&e, token.clone()], 1_000, 100);
@@ -459,7 +488,7 @@ fn test_enforce_rejects_negative_oracle_price() {
 fn test_enforce_rejects_zero_oracle_price() {
     let (e, smart_account, client) = setup_env();
     let oracle = setup_oracle(&e, ONE_USD);
-    let token = Address::generate(&e);
+    let token = setup_token(&e, 0);
 
     let rule =
         install_policy(&e, &client, &smart_account, &oracle, vec![&e, token.clone()], 1_000, 100);
@@ -477,7 +506,7 @@ fn test_enforce_rejects_zero_oracle_price() {
 fn test_enforce_rejects_future_dated_oracle_price() {
     let (e, smart_account, client) = setup_env();
     let oracle = setup_oracle(&e, ONE_USD);
-    let token = Address::generate(&e);
+    let token = setup_token(&e, 0);
 
     let rule =
         install_policy(&e, &client, &smart_account, &oracle, vec![&e, token.clone()], 1_000, 100);
@@ -497,7 +526,7 @@ fn test_enforce_rejects_future_dated_oracle_price() {
 fn test_enforce_rejects_over_limit() {
     let (e, smart_account, client) = setup_env();
     let oracle = setup_oracle(&e, ONE_USD);
-    let token = Address::generate(&e);
+    let token = setup_token(&e, 0);
 
     let rule =
         install_policy(&e, &client, &smart_account, &oracle, vec![&e, token.clone()], 1_000, 100);
@@ -510,8 +539,8 @@ fn test_enforce_rejects_over_limit() {
 fn test_enforce_tracks_spend_across_multiple_tokens() {
     let (e, smart_account, client) = setup_env();
     let oracle = setup_oracle(&e, ONE_USD);
-    let token_a = Address::generate(&e);
-    let token_b = Address::generate(&e);
+    let token_a = setup_token(&e, 0);
+    let token_b = setup_token(&e, 0);
 
     let rule = install_policy(
         &e,
@@ -537,8 +566,8 @@ fn test_enforce_tracks_spend_across_multiple_tokens() {
 fn test_enforce_rejects_combined_spend_over_limit_across_tokens() {
     let (e, smart_account, client) = setup_env();
     let oracle = setup_oracle(&e, ONE_USD);
-    let token_a = Address::generate(&e);
-    let token_b = Address::generate(&e);
+    let token_a = setup_token(&e, 0);
+    let token_b = setup_token(&e, 0);
 
     let rule = install_policy(
         &e,
@@ -559,7 +588,7 @@ fn test_enforce_rejects_combined_spend_over_limit_across_tokens() {
 fn test_enforce_allows_spend_again_after_window_expires() {
     let (e, smart_account, client) = setup_env();
     let oracle = setup_oracle(&e, ONE_USD);
-    let token = Address::generate(&e);
+    let token = setup_token(&e, 0);
 
     let period_ledgers = 100;
     let rule = install_policy(
@@ -591,6 +620,142 @@ fn test_enforce_allows_spend_again_after_window_expires() {
     let data = client.get_policy_data(&rule.id, &smart_account);
     assert_eq!(data.cached_total_spent_usd, 900);
     assert_eq!(data.spending_history.len(), 1);
+}
+
+// ################## DECIMAL NORMALIZATION ##################
+
+#[test]
+fn test_install_queries_each_token_decimals() {
+    let (e, smart_account, client) = setup_env();
+    let oracle = setup_oracle(&e, ONE_USD);
+    let token_a = setup_token(&e, 7);
+    let token_b = setup_token(&e, 6);
+
+    let rule = install_policy(
+        &e,
+        &client,
+        &smart_account,
+        &oracle,
+        vec![&e, token_a, token_b],
+        1_000,
+        100,
+    );
+
+    let data = client.get_policy_data(&rule.id, &smart_account);
+    assert_eq!(data.token_divisors, vec![&e, 10_000_000i128, 1_000_000i128]);
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #11)")] // InvalidTokenResponse
+fn test_install_rejects_token_decimals_too_large() {
+    let (e, smart_account, client) = setup_env();
+    let oracle = setup_oracle(&e, ONE_USD);
+    // 21 > MAX_TOKEN_DECIMALS (20).
+    let token = setup_token(&e, 21);
+
+    install_policy(&e, &client, &smart_account, &oracle, vec![&e, token], 1_000, 100);
+}
+
+#[test]
+fn test_enforce_normalizes_token_decimals() {
+    let (e, smart_account, client) = setup_env();
+    let oracle = setup_oracle(&e, ONE_USD);
+    // A realistic 7-decimal token (e.g. USDC on Stellar) priced at $1.00.
+    let token = setup_token(&e, 7);
+
+    let rule =
+        install_policy(&e, &client, &smart_account, &oracle, vec![&e, token.clone()], 1_000, 100);
+
+    // A transfer of 500 whole tokens arrives as 500 * 10^7 base units.
+    // Pre-fix this registered as ~$0.00005 of the cap; it must register as $500.
+    let context = transfer_context(&e, &token, 500 * 10_000_000);
+    client.enforce(&context, &Vec::new(&e), &rule, &smart_account);
+
+    let data = client.get_policy_data(&rule.id, &smart_account);
+    assert_eq!(data.cached_total_spent_usd, 500);
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #8)")] // SpendingLimitExceeded
+fn test_enforce_cap_bites_at_realistic_scale() {
+    let (e, smart_account, client) = setup_env();
+    let oracle = setup_oracle(&e, ONE_USD);
+    let token = setup_token(&e, 7);
+
+    let rule =
+        install_policy(&e, &client, &smart_account, &oracle, vec![&e, token.clone()], 1_000, 100);
+
+    // 1,001 whole tokens at $1.00 = $1,001 > $1,000 cap.
+    let context = transfer_context(&e, &token, 1_001 * 10_000_000);
+    client.enforce(&context, &Vec::new(&e), &rule, &smart_account);
+}
+
+#[test]
+fn test_enforce_tracks_mixed_decimal_tokens_against_one_cap() {
+    let (e, smart_account, client) = setup_env();
+    let oracle = setup_oracle(&e, ONE_USD);
+    let token_a = setup_token(&e, 7);
+    let token_b = setup_token(&e, 6);
+
+    let rule = install_policy(
+        &e,
+        &client,
+        &smart_account,
+        &oracle,
+        vec![&e, token_a.clone(), token_b.clone()],
+        1_000,
+        100,
+    );
+
+    // $600 through the 7-decimal token, $300 through the 6-decimal token.
+    client.enforce(
+        &transfer_context(&e, &token_a, 600 * 10_000_000),
+        &Vec::new(&e),
+        &rule,
+        &smart_account,
+    );
+    client.enforce(
+        &transfer_context(&e, &token_b, 300 * 1_000_000),
+        &Vec::new(&e),
+        &rule,
+        &smart_account,
+    );
+
+    let data = client.get_policy_data(&rule.id, &smart_account);
+    assert_eq!(data.cached_total_spent_usd, 900);
+}
+
+#[test]
+fn test_enforce_sub_dollar_transfer_truncates_to_zero() {
+    let (e, smart_account, client) = setup_env();
+    let oracle = setup_oracle(&e, ONE_USD);
+    let token = setup_token(&e, 7);
+
+    let rule =
+        install_policy(&e, &client, &smart_account, &oracle, vec![&e, token.clone()], 1_000, 100);
+
+    // 9_999_999 base units = $0.9999999. Whole-dollar accounting truncates it
+    // to $0; a sub-dollar transfer consumes none of the cap by design.
+    let context = transfer_context(&e, &token, 9_999_999);
+    client.enforce(&context, &Vec::new(&e), &rule, &smart_account);
+
+    let data = client.get_policy_data(&rule.id, &smart_account);
+    assert_eq!(data.cached_total_spent_usd, 0);
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #12)")] // AmountConversionOverflow
+fn test_enforce_rejects_conversion_overflow() {
+    let (e, smart_account, client) = setup_env();
+    let oracle = setup_oracle(&e, ONE_USD);
+    let token = setup_token(&e, 0);
+
+    let rule =
+        install_policy(&e, &client, &smart_account, &oracle, vec![&e, token.clone()], 1_000, 100);
+
+    // `amount * price` overflows i128 — fail closed rather than saturate.
+    let context = transfer_context(&e, &token, i128::MAX);
+    client.enforce(&context, &Vec::new(&e), &rule, &smart_account);
 }
 
 // ################## QUERY ##################
