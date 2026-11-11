@@ -78,6 +78,7 @@ exercised anywhere in the workspace. Flagging rather than hiding it.
   [#55](https://github.com/3K1-Labs/latch-contracts/pull/55),
   [#52](https://github.com/3K1-Labs/latch-contracts/pull/52) — held until after the audit
   snapshot; they add new contracts, not changes to audited ones.
+- **Recovery Policy & Admin Guard Policy**: Deployed on testnet (`CAOCYSLYOURJIQY2IC4AUI6FVYZEUH2G6MFHXRZHIMVVGDDD74F7AFQO`) and integrated in `latch-mobile` testnet staging, but explicitly excluded from `audit-v1` scope. Feature-gated out of mainnet via empty `EXPO_PUBLIC_RECOVERY_POLICY_MAINNET` until formal crate import and review in `audit-v1.1` (tracked in [issue #86](https://github.com/3K1-Labs/latch-contracts/issues/86) and [`docs/RECOVERY_AND_ADMIN_GUARD_STATUS.md`](RECOVERY_AND_ADMIN_GUARD_STATUS.md)).
 - Client code (`latch-web-extension`, `latch-mobile`, `latch-relayer`, `latch-api`).
 
 ## Dependencies
